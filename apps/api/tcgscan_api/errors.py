@@ -8,3 +8,8 @@ class AppError(Exception):
 class NotFoundError(AppError):
     def __init__(self, message: str = "Not found") -> None:
         super().__init__(message, status_code=404)
+
+
+class ForbiddenError(AppError):
+    def __init__(self, message: str = "Forbidden") -> None:
+        super().__init__(message, status_code=403)

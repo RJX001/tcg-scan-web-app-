@@ -43,12 +43,8 @@ def upgrade() -> None:
 
     if dialect == "postgresql":
         op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        game = sa.Enum(*GAME_VALUES, name="game")
-        sale_kind = sa.Enum("sold", "listing", name="sale_kind")
-        game.create(bind, checkfirst=True)
-        sale_kind.create(bind, checkfirst=True)
-        game_type: sa.types.TypeEngine = game
-        kind_type: sa.types.TypeEngine = sale_kind
+        game_type = sa.String(32)
+        kind_type = sa.String(16)
     else:
         game_type = sa.String(length=32)
         kind_type = sa.String(length=16)

@@ -90,6 +90,36 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
     return rows
 
 
+def _sample_listings(card_id: uuid.UUID) -> list[dict[str, object]]:
+    now = datetime.now(timezone.utc)
+    return [
+        {
+            "card_id": card_id,
+            "source": "ebay",
+            "kind": SaleKind.listing,
+            "sold_at": now,
+            "price": Decimal("265.00"),
+            "currency": "USD",
+            "price_usd": Decimal("265.00"),
+            "grade": "raw",
+            "listing_url": f"https://ebay.com/itm/listing-{card_id}-1",
+            "raw_payload": {"seed": True, "active": True},
+        },
+        {
+            "card_id": card_id,
+            "source": "ebay",
+            "kind": SaleKind.listing,
+            "sold_at": now,
+            "price": Decimal("289.99"),
+            "currency": "USD",
+            "price_usd": Decimal("289.99"),
+            "grade": "PSA 9",
+            "listing_url": f"https://ebay.com/itm/listing-{card_id}-2",
+            "raw_payload": {"seed": True, "active": True},
+        },
+    ]
+
+
 async def seed_async() -> None:
     async with get_sessionmaker()() as session:
         await CardsRepo(session).upsert_many(CARDS)
@@ -100,7 +130,17 @@ async def seed_async() -> None:
         )
         await SalesRepo(session).bulk_insert(sales)
 
-    print("db:seed — inserted 3 Pokemon cards + sample eBay comps")
+        listings = _sample_listings(CHARIZARD_ID) + _sample_listings(PIKACHU_ID)
+        await SalesRepo(session).bulk_insert(listings)
+
+        # Daily rollups for chart demo
+        now = datetime.now(timezone.utc)
+        for card_id in (CHARIZARD_ID, PIKACHU_ID, MEWTWO_ID):
+            for d in range(30):
+                day = now - timedelta(days=d)
+                await SalesRepo(session).rollup_day(card_id, day)
+
+    print("db:seed — inserted 3 Pokemon cards + sample eBay comps + daily rollups")
     print(f"  demo slug: {card_slug(Game.pokemon, 'base1', '4/102')}")
 
 

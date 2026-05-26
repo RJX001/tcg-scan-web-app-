@@ -34,14 +34,84 @@ class SalesRepo:
         await self._session.commit()
         return len(items)
 
-    async def comps_for_card(self, card_id: uuid.UUID, *, days: int = 30) -> list[SaleEvent]:
+    async def comps_for_card(
+        self,
+        card_id: uuid.UUID,
+        *,
+        days: int = 30,
+        source: str | None = None,
+        grade: str | None = None,
+    ) -> list[SaleEvent]:
         since = datetime.now() - timedelta(days=days)
         stmt = (
             select(SaleEvent)
             .where(SaleEvent.card_id == card_id, SaleEvent.sold_at >= since)
             .order_by(SaleEvent.sold_at.desc())
         )
+        if source:
+            stmt = stmt.where(SaleEvent.source == source)
+        if grade:
+            if grade.lower() == "raw":
+                stmt = stmt.where(
+                    (SaleEvent.grade.is_(None)) | (SaleEvent.grade.in_(["raw", "RAW", "None", ""]))
+                )
+            else:
+                stmt = stmt.where(SaleEvent.grade.ilike(f"%{grade}%"))
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def listings_for_card(
+        self,
+        card_id: uuid.UUID,
+        *,
+        limit: int = 20,
+        source: str | None = None,
+    ) -> list[SaleEvent]:
+        from tcgscan_api.db.models import SaleKind
+
+        stmt = (
+            select(SaleEvent)
+            .where(SaleEvent.card_id == card_id, SaleEvent.kind == SaleKind.listing)
+            .order_by(SaleEvent.price_usd.asc().nullslast(), SaleEvent.sold_at.desc())
+            .limit(limit)
+        )
+        if source:
+            stmt = stmt.where(SaleEvent.source == source)
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def chart_series(
+        self, card_id: uuid.UUID, *, days: int = 90, grade_bucket: str = "raw"
+    ) -> list[CardPriceDaily]:
+        since = datetime.now() - timedelta(days=days)
+        stmt = (
+            select(CardPriceDaily)
+            .where(
+                CardPriceDaily.card_id == card_id,
+                CardPriceDaily.grade_bucket == grade_bucket,
+                CardPriceDaily.day >= since,
+            )
+            .order_by(CardPriceDaily.day.asc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def source_summary(
+        self, card_id: uuid.UUID, *, days: int = 30
+    ) -> dict[str, float]:
+        """Median USD per source for price tiles."""
+        since = datetime.now() - timedelta(days=days)
+        stmt = (
+            select(
+                SaleEvent.source,
+                func.percentile_cont(0.5).within_group(SaleEvent.price_usd.asc()),
+            )
+            .where(
+                SaleEvent.card_id == card_id,
+                SaleEvent.sold_at >= since,
+                SaleEvent.price_usd.is_not(None),
+            )
+            .group_by(SaleEvent.source)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {str(src): float(med) for src, med in rows if med is not None}
 
     async def rollup_day(self, card_id: uuid.UUID, day: datetime) -> int:
         """Compute roll-ups per grade_bucket for a given (card_id, day). Returns rows written."""

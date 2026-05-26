@@ -17,6 +17,12 @@ async def card_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    async with get_sessionmaker()() as session:
+        yield session
+
+
 async def upsert_cards(session: AsyncSession, rows: list[dict[str, object]]) -> int:
     written: int = await CardsRepo(session).upsert_many(rows)
     return written

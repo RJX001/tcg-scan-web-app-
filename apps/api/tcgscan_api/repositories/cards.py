@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +40,30 @@ class CardsRepo:
             return None
         return await self.get_by_external(game, set_code, number)
 
+    async def search(
+        self,
+        *,
+        q: str,
+        game: str | None = None,
+        limit: int = 20,
+    ) -> list[CardIdentity]:
+        pattern = f"%{q.strip()}%"
+        stmt = select(CardIdentity).where(
+            or_(
+                CardIdentity.name.ilike(pattern),
+                CardIdentity.set_name.ilike(pattern),
+                CardIdentity.set_code.ilike(pattern),
+                CardIdentity.number.ilike(pattern),
+            )
+        )
+        if game:
+            try:
+                stmt = stmt.where(CardIdentity.game == Game(game))
+            except ValueError:
+                pass
+        stmt = stmt.order_by(func.length(CardIdentity.name), CardIdentity.name).limit(limit)
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def upsert_many(self, rows: Iterable[dict[str, object]]) -> int:
         """Insert/update many card_identity rows. Returns number processed."""
         items = list(rows)
@@ -70,7 +94,6 @@ class CardsRepo:
             )
             await self._session.execute(stmt)
         else:
-            # sqlite fallback: best-effort merge
             for r in items:
                 game_val = r["game"]
                 game = game_val if isinstance(game_val, Game) else Game(str(game_val))

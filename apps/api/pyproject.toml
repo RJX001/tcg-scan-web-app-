@@ -17,6 +17,8 @@ dependencies = [
     "redis>=5.2.1",
     "pgvector>=0.4.0",
     "python-multipart>=0.0.20",
+    "stripe>=11.0.0",
+    "clerk-backend-api>=1.0.0",
     "tcgscan-sdk-py",
     "tcgscan-agents",
     "tcgscan-ml",
@@ -37,6 +39,7 @@ dev = [
     "httpx>=0.28.1",
     "respx>=0.22.0",
     "aiosqlite>=0.21.0",
+    "sentry-sdk[fastapi]>=2.0.0",
 ]
 
 [build-system]

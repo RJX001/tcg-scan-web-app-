@@ -124,6 +124,7 @@ async def embed_game(game: str, *, limit: int | None = None, batch: int = 64) ->
                 vec = await _embed_image(
                     http_client, image_url=image_url, dim=settings.embedding_dim
                 )
+                pop_seed = hashlib.sha256(str(card.id).encode()).digest()[0] / 255.0
                 buffer.append(
                     qm.PointStruct(
                         id=_card_uuid(card.id),
@@ -136,6 +137,7 @@ async def embed_game(game: str, *, limit: int | None = None, batch: int = 64) ->
                             "name": card.name,
                             "set_code": card.set_code,
                             "number": card.number,
+                            "popularity": pop_seed,
                         },
                     )
                 )

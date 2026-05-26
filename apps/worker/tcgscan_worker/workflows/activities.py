@@ -11,6 +11,14 @@ from tcgscan_worker.rollup import rollup_all
 
 
 @activity.defn
+async def activity_evaluate_alerts() -> int:
+    activity.heartbeat()
+    from tcgscan_worker.alerts.monitor import evaluate_all_alerts
+
+    return await evaluate_all_alerts()
+
+
+@activity.defn
 async def activity_ingest_catalog(game: str, limit: int | None = None) -> int:
     activity.heartbeat()
     return await ingest_game(game, limit=limit)

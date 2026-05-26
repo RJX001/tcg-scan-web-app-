@@ -3,8 +3,9 @@ from __future__ import annotations
 import base64
 import binascii
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
+from tcgscan_api.middleware.rate_limit import check_scan_rate_limit
 from tcgscan_api.services.scan import ScanInput, ScanResult, run_scan
 
 router = APIRouter(prefix="/scan", tags=["scan"])
@@ -12,10 +13,12 @@ router = APIRouter(prefix="/scan", tags=["scan"])
 
 @router.post("", response_model=ScanResult)
 async def scan(
+    request: Request,
     image: UploadFile = File(...),
     game: str | None = Form(default=None),
     top_k: int = Form(default=5),
 ) -> ScanResult:
+    await check_scan_rate_limit(request)
     raw = await image.read()
     if not raw:
         raise HTTPException(status_code=400, detail="empty image")

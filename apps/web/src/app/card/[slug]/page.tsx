@@ -1,6 +1,15 @@
+import { CardActions } from "@/components/card-actions";
+import { PriceChart } from "@/components/price-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
-import type { CardOut, CompOut, CompSummary } from "@tcgscan/sdk-ts";
-import { getCardBySlug, getCompSummary, getComps } from "@tcgscan/sdk-ts";
+import type { CardOut, CompOut, CompSummary, GradeVerdict, SourcePrices } from "@tcgscan/sdk-ts";
+import {
+  getCardBySlug,
+  getChart,
+  getCompSummary,
+  getComps,
+  getGradeRoi,
+  getSourcePrices,
+} from "@tcgscan/sdk-ts";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -30,18 +39,43 @@ function fmtUsd(n: number | null | undefined) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
+function VerdictBadge({ verdict }: { verdict: GradeVerdict }) {
+  const colors: Record<string, string> = {
+    GRADE: "bg-green-100 text-green-800",
+    SELL: "bg-red-100 text-red-800",
+    HOLD: "bg-zinc-100 text-zinc-800",
+    BUY: "bg-blue-100 text-blue-800",
+  };
+  return (
+    <div className={`rounded-lg p-4 ${colors[verdict.action] ?? colors.HOLD}`}>
+      <p className="font-semibold">{verdict.action}</p>
+      <p className="mt-1 text-sm">{verdict.reason}</p>
+    </div>
+  );
+}
+
 export default async function CardDetailPage({ params }: Props) {
   const { slug } = await params;
   let card: CardOut;
   let comps: CompOut[];
   let summary: CompSummary;
+  let chart: Awaited<ReturnType<typeof getChart>>;
+  let sources: SourcePrices;
+  let roi: GradeVerdict | null = null;
 
   try {
     card = await getCardBySlug(slug);
-    [comps, summary] = await Promise.all([
-      getComps(card.id, 30),
+    [comps, summary, chart, sources] = await Promise.all([
+      getComps(card.id, 90),
       getCompSummary(card.id, 30),
+      getChart(card.id, 90),
+      getSourcePrices(card.id, 30),
     ]);
+    try {
+      roi = await getGradeRoi(card.id, 9);
+    } catch {
+      roi = null;
+    }
   } catch {
     notFound();
   }
@@ -77,22 +111,48 @@ export default async function CardDetailPage({ params }: Props) {
             <PriceTile label="30d high" value={fmtUsd(summary.max_usd)} />
           </div>
 
-          <p className="mt-4 text-sm text-zinc-500">
-            {summary.count} eBay sold comps in the last 30 days
-          </p>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <PriceTile label="eBay" value={fmtUsd(sources.ebay_median_usd)} />
+            <PriceTile label="TCGPlayer" value={fmtUsd(sources.tcgplayer_median_usd)} />
+            <PriceTile label="Cardmarket" value={fmtUsd(sources.cardmarket_median_usd)} />
+          </div>
+
+          <p className="mt-4 text-sm text-zinc-500">{summary.count} sold comps in the last 30 days</p>
+
+          <div className="mt-6">
+            <CardActions cardId={card.id} cardName={card.name} />
+          </div>
         </div>
       </div>
 
       <Card className="mt-10">
         <CardHeader>
-          <CardTitle>Recent sold comps</CardTitle>
+          <CardTitle>90-day price chart</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PriceChart data={chart} />
+        </CardContent>
+      </Card>
+
+      {roi && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Grade-ladder ROI</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VerdictBadge verdict={roi} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Sold comps (90 days)</CardTitle>
         </CardHeader>
         <CardContent>
           {comps.length === 0 ? (
             <p className="text-sm text-zinc-600">
-              No comps yet. Run{" "}
-              <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code> or{" "}
-              <code className="rounded bg-zinc-100 px-1">ingest:pricing</code> with eBay credentials.
+              No comps yet. Run <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code>.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -109,27 +169,9 @@ export default async function CardDetailPage({ params }: Props) {
                   {comps.map((c, i) => (
                     <tr key={`${c.sold_at}-${i}`} className="border-b border-zinc-100">
                       <td className="py-2 pr-4">{new Date(c.sold_at).toLocaleDateString()}</td>
-                      <td className="py-2 pr-4 font-medium">
-                        {fmtUsd(c.price)}
-                        {c.currency !== "USD" && (
-                          <span className="ml-1 text-xs text-zinc-400">{c.currency}</span>
-                        )}
-                      </td>
+                      <td className="py-2 pr-4 font-medium">{fmtUsd(c.price)}</td>
                       <td className="py-2 pr-4">{c.grade ?? "raw"}</td>
-                      <td className="py-2">
-                        {c.listing_url ? (
-                          <a
-                            href={c.listing_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            {c.source}
-                          </a>
-                        ) : (
-                          c.source
-                        )}
-                      </td>
+                      <td className="py-2">{c.source}</td>
                     </tr>
                   ))}
                 </tbody>

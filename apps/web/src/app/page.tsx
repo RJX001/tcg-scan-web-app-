@@ -10,9 +10,9 @@ export default function LandingPage() {
           Scan once. Know the market.
         </h1>
         <p className="mt-4 text-lg text-zinc-600">
-          AI-native price intelligence for every modern TCG and sports card — sold comps, active
-          listings, <strong className="font-semibold text-zinc-800">AI condition grade</strong>, and
-          grading ROI verdicts.
+          Price guide for every modern TCG and sports card — sold comps, active listings,{" "}
+          <strong className="font-semibold text-zinc-800">condition estimates</strong>, and grading
+          ROI verdicts.
         </p>
       </div>
       <Card className="w-full max-w-md">
@@ -21,8 +21,8 @@ export default function LandingPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-sm text-zinc-600">
-            Scan a card, see cross-marketplace comps, condition grade, and grading ROI — built to
-            beat Card Ladder and CardPulse on coverage and intelligence.
+            Scan a card, see cross-marketplace comps, condition estimates, and grading ROI — across
+            Pokemon, sports, and every major TCG.
           </p>
           <Button asChild>
             <Link href="/scan">Open scanner</Link>

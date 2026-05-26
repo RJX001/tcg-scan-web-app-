@@ -24,7 +24,11 @@ def _stub_embed_vector(image_b64: str, dim: int = 1024) -> list[float]:
 
 
 def detect(image_b64: str) -> dict[str, object]:
-    return {"bboxes": [], "image_b64_len": len(image_b64)}
+    """Return full-frame bbox when no YOLO model is loaded (local dev)."""
+    return {
+        "bboxes": [{"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0, "angle": 0.0}],
+        "image_b64_len": len(image_b64),
+    }
 
 
 def embed(image_b64: str) -> dict[str, object]:
@@ -33,7 +37,8 @@ def embed(image_b64: str) -> dict[str, object]:
 
 
 def ocr(image_b64: str) -> dict[str, object]:
-    return {"text": "", "image_b64_len": len(image_b64)}
+    """Stub OCR — returns empty text; wire PaddleOCR in production Modal deploy."""
+    return {"text": "", "fields": {"name": None, "number": None, "set": None}}
 
 
 def grade(image_b64: str) -> dict[str, object]:

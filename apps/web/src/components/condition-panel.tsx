@@ -39,7 +39,7 @@ export function ConditionPanel({ condition }: { condition: ConditionEstimate }) 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            AI condition grade
+            Condition estimate
           </p>
           <p className="mt-1 text-2xl font-bold">{condition.psa_label ?? "Analyzing…"}</p>
           <p className="text-sm text-zinc-600">
@@ -70,10 +70,6 @@ export function ConditionPanel({ condition }: { condition: ConditionEstimate }) 
 
       {verdict && (
         <p className="mt-4 text-sm leading-relaxed text-zinc-700">{verdict.reason}</p>
-      )}
-
-      {condition.model && (
-        <p className="mt-3 text-xs text-zinc-400">Model: {condition.model}</p>
       )}
     </div>
   );

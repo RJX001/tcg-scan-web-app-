@@ -10,6 +10,15 @@ export type ScanMatch = {
   score: number;
   cos_sim: number;
   ocr_boost?: number;
+  popularity_boost?: number;
+};
+
+export type DetectBBox = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  angle?: number;
 };
 
 export type ConditionEstimate = {
@@ -39,6 +48,8 @@ export type ScanResult = {
   matches: ScanMatch[];
   condition: ConditionEstimate;
   cached?: boolean;
+  bbox?: DetectBBox | null;
+  stages_ms?: Record<string, number> | null;
 };
 
 export type CardOut = {
@@ -71,14 +82,51 @@ export type CompSummary = {
   max_usd?: number | null;
 };
 
+export type ChartPoint = {
+  day: string;
+  median_usd: number;
+  sample_count: number;
+};
+
+export type SourcePrices = {
+  ebay_median_usd?: number | null;
+  tcgplayer_median_usd?: number | null;
+  cardmarket_median_usd?: number | null;
+};
+
+export type PortfolioItemOut = {
+  id: string;
+  card: CardOut;
+  quantity: number;
+  cost_basis_usd?: number | null;
+  notes?: string | null;
+};
+
+export type AlertOut = {
+  id: string;
+  card: CardOut;
+  direction: "below" | "above";
+  threshold_usd: number;
+  grade_filter?: string | null;
+  active: boolean;
+};
+
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+function devHeaders(): HeadersInit {
+  return { "X-Dev-User-Id": "dev-user" };
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${baseUrl}${path}`, init);
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: { ...devHeaders(), ...(init?.headers ?? {}) },
+  });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(`API error ${res.status}: ${detail}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -97,6 +145,16 @@ export async function scanCard(
   return apiFetch<ScanResult>("/v1/scan", { method: "POST", body: form });
 }
 
+export async function searchCards(
+  q: string,
+  opts?: { game?: string; limit?: number },
+): Promise<CardOut[]> {
+  const params = new URLSearchParams({ q });
+  if (opts?.game) params.set("game", opts.game);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  return apiFetch<CardOut[]>(`/v1/cards/search?${params}`);
+}
+
 export async function getCard(cardId: string): Promise<CardOut> {
   return apiFetch<CardOut>(`/v1/cards/${cardId}`);
 }
@@ -105,10 +163,71 @@ export async function getCardBySlug(slug: string): Promise<CardOut> {
   return apiFetch<CardOut>(`/v1/cards/slug/${encodeURIComponent(slug)}`);
 }
 
-export async function getComps(cardId: string, days = 30): Promise<CompOut[]> {
-  return apiFetch<CompOut[]>(`/v1/cards/${cardId}/comps?days=${days}`);
+export async function getComps(
+  cardId: string,
+  days = 30,
+  opts?: { source?: string; grade?: string },
+): Promise<CompOut[]> {
+  const params = new URLSearchParams({ days: String(days) });
+  if (opts?.source) params.set("source", opts.source);
+  if (opts?.grade) params.set("grade", opts.grade);
+  return apiFetch<CompOut[]>(`/v1/cards/${cardId}/comps?${params}`);
 }
 
 export async function getCompSummary(cardId: string, days = 30): Promise<CompSummary> {
   return apiFetch<CompSummary>(`/v1/cards/${cardId}/comps/summary?days=${days}`);
+}
+
+export async function getChart(cardId: string, days = 90): Promise<ChartPoint[]> {
+  return apiFetch<ChartPoint[]>(`/v1/cards/${cardId}/chart?days=${days}`);
+}
+
+export async function getSourcePrices(cardId: string, days = 30): Promise<SourcePrices> {
+  return apiFetch<SourcePrices>(`/v1/cards/${cardId}/sources?days=${days}`);
+}
+
+export async function getGradeRoi(cardId: string, psaHigh = 9): Promise<GradeVerdict> {
+  return apiFetch<GradeVerdict>(`/v1/cards/${cardId}/grade-roi?psa_high=${psaHigh}`);
+}
+
+export async function getPortfolio(): Promise<PortfolioItemOut[]> {
+  return apiFetch<PortfolioItemOut[]>("/v1/portfolio");
+}
+
+export async function addToPortfolio(body: {
+  card_id: string;
+  quantity?: number;
+  cost_basis_usd?: number;
+  notes?: string;
+}): Promise<PortfolioItemOut> {
+  return apiFetch<PortfolioItemOut>("/v1/portfolio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function removeFromPortfolio(itemId: string): Promise<void> {
+  await apiFetch<void>(`/v1/portfolio/${itemId}`, { method: "DELETE" });
+}
+
+export async function getAlerts(): Promise<AlertOut[]> {
+  return apiFetch<AlertOut[]>("/v1/alerts");
+}
+
+export async function createAlert(body: {
+  card_id: string;
+  direction: "below" | "above";
+  threshold_usd: number;
+  grade_filter?: string;
+}): Promise<AlertOut> {
+  return apiFetch<AlertOut>("/v1/alerts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteAlert(alertId: string): Promise<void> {
+  await apiFetch<void>(`/v1/alerts/${alertId}`, { method: "DELETE" });
 }
