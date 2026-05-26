@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build
+dist/
+.next/
+out/
+.turbo/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# env
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML
+apps/ml/weights/*.pt
+apps/ml/weights/*.pth
+!apps/ml/weights/manifest.toml
+
+# data
+data/labels/inbox/*
+!data/labels/inbox/.gitkeep
+
+# eval reports
+apps/ml/eval/reports/*.md
+!apps/ml/eval/reports/.gitkeep
+
+# logs
+*.log

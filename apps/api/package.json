@@ -1,0 +1,14 @@
+{
+  "name": "@tcgscan/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uv run uvicorn tcgscan_api.main:app --reload --host 0.0.0.0 --port 8000",
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "uv run mypy tcgscan_api",
+    "test": "uv run pytest",
+    "build": "echo api build ok",
+    "db:migrate": "uv run alembic upgrade head",
+    "db:seed": "uv run python -m tcgscan_api.seed"
+  }
+}

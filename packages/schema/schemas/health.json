@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tcgscan.dev/schemas/health.json",
+  "title": "HealthResponse",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "degraded"] },
+    "version": { "type": "string" }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tcgscan.dev/schemas/card_identity.json",
+  "title": "CardIdentity",
+  "type": "object",
+  "required": ["id", "game", "name"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "game": {
+      "type": "string",
+      "enum": [
+        "pokemon",
+        "mtg",
+        "yugioh",
+        "one_piece",
+        "lorcana",
+        "star_wars_unlimited",
+        "flesh_and_blood",
+        "digimon",
+        "sports_baseball",
+        "sports_basketball",
+        "sports_football",
+        "sports_soccer",
+        "other"
+      ]
+    },
+    "name": { "type": "string" },
+    "set_code": { "type": "string" },
+    "set_name": { "type": "string" },
+    "number": { "type": "string" },
+    "rarity": { "type": "string" },
+    "variants": { "type": "object" },
+    "attributes": { "type": "object" },
+    "image_urls": { "type": "object" },
+    "external_ids": { "type": "object" }
+  }
+}
