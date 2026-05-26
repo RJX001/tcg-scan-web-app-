@@ -30,7 +30,7 @@ async def account(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> AccountOut:
-    auth = await resolve_db_user(session, request)
+    await resolve_db_user(session, request)
     return await get_account(session, request)
 
 

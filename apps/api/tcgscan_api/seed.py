@@ -140,7 +140,7 @@ async def seed_async() -> None:
                 day = now - timedelta(days=d)
                 await SalesRepo(session).rollup_day(card_id, day)
 
-    print("db:seed — inserted 3 Pokemon cards + sample eBay comps + daily rollups")
+    print("db:seed — inserted 3 Pokemon cards + sample comps, listings + daily rollups")
     print(f"  demo slug: {card_slug(Game.pokemon, 'base1', '4/102')}")
 
 

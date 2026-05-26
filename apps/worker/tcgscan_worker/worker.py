@@ -7,6 +7,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from tcgscan_worker.workflows import (
+    AlertMonitorWorkflow,
     CatalogIngestWorkflow,
     EbayActiveWorkflow,
     EbaySoldWorkflow,
@@ -15,6 +16,7 @@ from tcgscan_worker.workflows import (
 )
 from tcgscan_worker.workflows.activities import (
     activity_embed_catalog,
+    activity_evaluate_alerts,
     activity_ingest_catalog,
     activity_ingest_pricing_batch,
     activity_rollup_daily,
@@ -42,6 +44,7 @@ async def run_worker() -> None:
         client,
         task_queue=TASK_QUEUE,
         workflows=[
+            AlertMonitorWorkflow,
             CatalogIngestWorkflow,
             EbayActiveWorkflow,
             EbaySoldWorkflow,
@@ -53,6 +56,7 @@ async def run_worker() -> None:
             activity_embed_catalog,
             activity_rollup_daily,
             activity_ingest_pricing_batch,
+            activity_evaluate_alerts,
         ],
     )
     log.info("worker.start", task_queue=TASK_QUEUE)

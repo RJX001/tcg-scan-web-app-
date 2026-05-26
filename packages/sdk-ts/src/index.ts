@@ -100,6 +100,7 @@ export type PortfolioItemOut = {
   quantity: number;
   cost_basis_usd?: number | null;
   notes?: string | null;
+  estimated_value_usd?: number | null;
 };
 
 export type AlertOut = {
@@ -109,6 +110,30 @@ export type AlertOut = {
   threshold_usd: number;
   grade_filter?: string | null;
   active: boolean;
+};
+
+export type ListingOut = {
+  source: string;
+  price: number;
+  currency: string;
+  grade?: string | null;
+  listing_url?: string | null;
+  listed_at: string;
+};
+
+export type PortfolioSummaryOut = {
+  item_count: number;
+  total_quantity: number;
+  total_cost_basis_usd?: number | null;
+  estimated_value_usd?: number | null;
+};
+
+export type AccountOut = {
+  clerk_id: string;
+  email?: string | null;
+  tier: string;
+  portfolio_limit?: number | null;
+  scans_per_day?: number | null;
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -226,6 +251,26 @@ export async function createAlert(body: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+export async function getListings(cardId: string, limit = 20): Promise<ListingOut[]> {
+  return apiFetch<ListingOut[]>(`/v1/cards/${cardId}/listings?limit=${limit}`);
+}
+
+export async function getPortfolioSummary(): Promise<PortfolioSummaryOut> {
+  return apiFetch<PortfolioSummaryOut>("/v1/portfolio/summary");
+}
+
+export async function getAccount(): Promise<AccountOut> {
+  return apiFetch<AccountOut>("/v1/account");
+}
+
+export async function startCheckout(): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>("/v1/billing/checkout", { method: "POST" });
+}
+
+export async function openBillingPortal(): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>("/v1/billing/portal", { method: "POST" });
 }
 
 export async function deleteAlert(alertId: string): Promise<void> {

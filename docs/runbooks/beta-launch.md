@@ -5,10 +5,13 @@ Cross-check against Phase 1 §9 KPIs before opening the 25-user closed beta.
 ## Product
 
 - [ ] Scan flow works on mobile Safari + Chrome (upload + camera)
-- [ ] Card detail shows 90d chart + multi-source comps
-- [ ] Search returns catalog matches
-- [ ] Portfolio add/remove works with auth
-- [ ] Price alerts CRUD + MonitorAgent Temporal schedule
+- [x] Card detail shows 90d chart + multi-source comps + active listings
+- [x] Search returns catalog matches
+- [x] Portfolio add/remove works with auth
+- [x] Portfolio summary + estimated value
+- [x] Price alerts CRUD (Pro-gated) + MonitorAgent Temporal schedule scaffold
+- [x] Stripe checkout + webhook routes (requires keys)
+- [x] Free tier limits: 10 scans/day, 25 portfolio items
 
 ## ML
 
@@ -29,6 +32,7 @@ Cross-check against Phase 1 §9 KPIs before opening the 25-user closed beta.
 - [ ] OpenTelemetry → Grafana Cloud
 - [ ] LangSmith project for agent traces
 - [ ] Stripe Pro tier + free scan limits enforced
+- [x] Code: tier gates + Stripe scaffold shipped (configure keys for prod)
 
 ## Beta
 

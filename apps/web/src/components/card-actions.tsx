@@ -33,7 +33,12 @@ export function CardActions({ cardId, cardName }: Props) {
       await createAlert({ card_id: cardId, direction: "below", threshold_usd: 1 });
       setStatus("Price alert created (below $1 — edit in Alerts)");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Failed to create alert");
+      const msg = e instanceof Error ? e.message : "Failed to create alert";
+      setStatus(
+        msg.includes("403") || msg.includes("Pro")
+          ? "Price alerts require Pro — see /account"
+          : msg,
+      );
     } finally {
       setLoading(false);
     }

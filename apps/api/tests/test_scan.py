@@ -30,7 +30,11 @@ async def test_scan_endpoint_accepts_upload(monkeypatch: pytest.MonkeyPatch) -> 
     async def fake_search(**_kwargs: object) -> list[object]:
         return []
 
+    async def noop_rate_limit(_request: object) -> None:
+        return None
+
     monkeypatch.setattr(scan_mod, "search_similar", fake_search)
+    monkeypatch.setattr("tcgscan_api.routes.scan.check_scan_rate_limit", noop_rate_limit)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -38,6 +42,7 @@ async def test_scan_endpoint_accepts_upload(monkeypatch: pytest.MonkeyPatch) -> 
             "/v1/scan",
             files={"image": ("card.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
             data={"top_k": "3"},
+            headers={"X-Dev-User-Id": "scan-test"},
         )
     assert r.status_code == 200, r.text
     body = r.json()

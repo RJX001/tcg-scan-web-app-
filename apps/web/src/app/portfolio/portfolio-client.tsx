@@ -1,12 +1,15 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
-import { getPortfolio, removeFromPortfolio } from "@tcgscan/sdk-ts";
+import { getPortfolio, getPortfolioSummary, removeFromPortfolio } from "@tcgscan/sdk-ts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 export function PortfolioClient() {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getPortfolio>>>([]);
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof getPortfolioSummary>> | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,6 +17,7 @@ export function PortfolioClient() {
     setLoading(true);
     try {
       setItems(await getPortfolio());
+      setSummary(await getPortfolioSummary());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load portfolio");
     } finally {
@@ -34,6 +38,28 @@ export function PortfolioClient() {
   if (error) return <p className="text-sm text-red-600">{error}</p>;
 
   return (
+    <div className="space-y-6">
+      {summary && summary.item_count > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Collection value</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-zinc-500">Cards</p>
+              <p className="text-lg font-semibold">{summary.item_count}</p>
+            </div>
+            <div>
+              <p className="text-zinc-500">Est. value (30d median)</p>
+              <p className="text-lg font-semibold">
+                {summary.estimated_value_usd != null
+                  ? `$${summary.estimated_value_usd.toFixed(2)}`
+                  : "—"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     <Card>
       <CardHeader>
         <CardTitle>Your collection</CardTitle>
@@ -69,5 +95,6 @@ export function PortfolioClient() {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }
