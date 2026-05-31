@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.repositories.sales import SalesRepo
+from tcgscan_api.services.agents_bridge import run_grade_roi_agent
 
 DEFAULT_GRADING_COST_USD = 25.0
 MIN_GRADE_PROFIT_USD = 40.0
@@ -42,6 +43,26 @@ def _bucket_price(rows: Sequence[object], *, raw: bool, grade_prefix: str | None
         elif grade_prefix and grade_prefix in g:
             prices.append(price)
     return _median(prices)
+
+
+async def _with_agent(verdict: GradeVerdict, *, card_id: uuid.UUID, psa_high: int) -> GradeVerdict:
+    agent = await run_grade_roi_agent(card_id=str(card_id), psa_high=psa_high)
+    if not agent:
+        return verdict
+    # DB comps drive GRADE/SELL; agent refines borderline HOLD verdicts only.
+    if verdict.action in {"GRADE", "SELL"}:
+        return verdict.model_copy(
+            update={
+                "expected_profit_usd": agent.get("expected_profit_usd") or verdict.expected_profit_usd,
+            }
+        )
+    return verdict.model_copy(
+        update={
+            "action": agent["action"],
+            "reason": agent["reason"],
+            "expected_profit_usd": agent.get("expected_profit_usd") or verdict.expected_profit_usd,
+        }
+    )
 
 
 async def compute_verdict(
@@ -76,39 +97,49 @@ async def compute_verdict(
         profit = graded_est - raw_med - DEFAULT_GRADING_COST_USD
 
     if psa_high >= 9 and profit is not None and profit >= MIN_GRADE_PROFIT_USD:
-        return GradeVerdict(
-            action="GRADE",
-            reason=(
-                f"Estimated PSA {psa_high}+ grade could net "
-                f"${profit:.0f} after ~${DEFAULT_GRADING_COST_USD:.0f} grading fees."
+        return await _with_agent(
+            GradeVerdict(
+                action="GRADE",
+                reason=(
+                    f"Estimated PSA {psa_high}+ grade could net "
+                    f"${profit:.0f} after ~${DEFAULT_GRADING_COST_USD:.0f} grading fees."
+                ),
+                raw_median_usd=raw_med,
+                graded_estimate_usd=graded_est,
+                expected_profit_usd=profit,
             ),
-            raw_median_usd=raw_med,
-            graded_estimate_usd=graded_est,
-            expected_profit_usd=profit,
+            card_id=card_id,
+            psa_high=psa_high,
         )
 
     if psa_high <= 7:
-        return GradeVerdict(
-            action="SELL",
-            reason="Condition likely tops out below PSA 8 — sell raw rather than grading.",
-            raw_median_usd=raw_med,
-            graded_estimate_usd=graded_est,
-            expected_profit_usd=profit,
+        return await _with_agent(
+            GradeVerdict(
+                action="SELL",
+                reason="Condition likely tops out below PSA 8 — sell raw rather than grading.",
+                raw_median_usd=raw_med,
+                graded_estimate_usd=graded_est,
+                expected_profit_usd=profit,
+            ),
+            card_id=card_id,
+            psa_high=psa_high,
         )
 
     if profit is not None and profit < 0:
-        return GradeVerdict(
+        base = GradeVerdict(
             action="HOLD",
             reason="Grading fees likely exceed upside at this condition — hold raw.",
             raw_median_usd=raw_med,
             graded_estimate_usd=graded_est,
             expected_profit_usd=profit,
         )
+    else:
+        base = GradeVerdict(
+            action="HOLD",
+            reason="Borderline grade candidate — monitor comps or improve centering before submitting.",
+            raw_median_usd=raw_med,
+            graded_estimate_usd=graded_est,
+            expected_profit_usd=profit,
+        )
 
-    return GradeVerdict(
-        action="HOLD",
-        reason="Borderline grade candidate — monitor comps or improve centering before submitting.",
-        raw_median_usd=raw_med,
-        graded_estimate_usd=graded_est,
-        expected_profit_usd=profit,
-    )
+    return await _with_agent(base, card_id=card_id, psa_high=psa_high)

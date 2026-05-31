@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.session import get_session
@@ -42,6 +45,48 @@ async def get_portfolio_summary(
 ) -> PortfolioSummaryOut:
     auth = await resolve_db_user(session, request)
     return await portfolio_summary(session, auth)
+
+
+@router.get("/portfolio/export")
+async def export_portfolio(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    auth = await resolve_db_user(session, request)
+    items = await list_portfolio(session, auth)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "name",
+            "game",
+            "set",
+            "number",
+            "quantity",
+            "cost_basis_usd",
+            "estimated_value_usd",
+            "slug",
+        ]
+    )
+    for item in items:
+        writer.writerow(
+            [
+                item.card.name,
+                item.card.game,
+                item.card.set_name or item.card.set_code or "",
+                item.card.number or "",
+                item.quantity,
+                item.cost_basis_usd or "",
+                item.estimated_value_usd or "",
+                item.card.slug,
+            ]
+        )
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="tcgscan-portfolio.csv"'},
+    )
 
 
 @router.post("/portfolio", response_model=PortfolioItemOut, status_code=201)

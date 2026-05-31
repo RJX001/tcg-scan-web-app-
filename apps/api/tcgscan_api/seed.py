@@ -7,10 +7,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from tcgscan_api.db.models import Game, SaleKind
+from tcgscan_api.db.models import Game, SaleKind, UserTier
 from tcgscan_api.db.session import get_sessionmaker
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.sales import SalesRepo
+from tcgscan_api.repositories.users import UsersRepo
 from tcgscan_api.services.slug import card_slug
 
 # Stable UUIDs for dev fixtures
@@ -140,7 +141,14 @@ async def seed_async() -> None:
                 day = now - timedelta(days=d)
                 await SalesRepo(session).rollup_day(card_id, day)
 
+        dev_user = await UsersRepo(session).get_or_create(
+            clerk_id="dev-user", email="dev@localhost"
+        )
+        if dev_user.tier != UserTier.pro:
+            await UsersRepo(session).set_tier(dev_user.id, UserTier.pro)
+
     print("db:seed — inserted 3 Pokemon cards + sample comps, listings + daily rollups")
+    print("  dev-user tier: pro (alerts + digest enabled)")
     print(f"  demo slug: {card_slug(Game.pokemon, 'base1', '4/102')}")
 
 

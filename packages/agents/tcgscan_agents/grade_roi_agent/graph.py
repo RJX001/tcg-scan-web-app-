@@ -6,7 +6,7 @@ from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
 
 from tcgscan_agents.budget import BudgetGuard
-from tcgscan_agents.tools.pricing import fetch_comps_summary, grading_cost_usd
+from tcgscan_agents.tools.pricing import _api_base
 from tcgscan_agents.tracing import traced
 
 
@@ -27,11 +27,23 @@ class GradeROIState(TypedDict):
 
 
 @traced("agent.grade_roi.rules")
-async def rules_node(state: GradeROIState) -> GradeROIState:
+def rules_node(state: GradeROIState) -> GradeROIState:
+    import httpx
+
     inp = state["input"]
-    summary = await fetch_comps_summary(inp.card_id)
+    summary: dict[str, object] = {"median_usd": None}
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(
+                f"{_api_base()}/v1/cards/{inp.card_id}/comps/summary",
+                params={"days": 30},
+            )
+            if r.status_code == 200:
+                summary = r.json()
+    except httpx.HTTPError:
+        pass
     median = summary.get("median_usd")
-    cost = await grading_cost_usd()
+    cost = 25.0
     if median is None:
         return {
             **state,

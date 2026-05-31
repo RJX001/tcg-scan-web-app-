@@ -6,7 +6,10 @@ from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
 
 from tcgscan_agents.budget import BudgetGuard
+from tcgscan_agents.digest_agent.prompts import DIGEST_COMPOSE_PROMPT  # used when LLM synthesis enabled
 from tcgscan_agents.tracing import traced
+
+_ = DIGEST_COMPOSE_PROMPT  # Sonnet node will consume this when ANTHROPIC_API_KEY is set
 
 
 class DigestInput(BaseModel):

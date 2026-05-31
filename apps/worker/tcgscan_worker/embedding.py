@@ -50,9 +50,11 @@ async def _download_image_b64(image_url: str) -> str | None:
 
 
 async def _embed_image(client: ResilientClient | None, *, image_url: str, dim: int) -> list[float]:
-    if client is None or not os.getenv("MODAL_EMBED_URL"):
-        return _stub_vector(image_url, dim)
     image_b64 = await _download_image_b64(image_url)
+    if client is None or not os.getenv("MODAL_EMBED_URL"):
+        if image_b64:
+            return _stub_vector(image_b64, dim)
+        return _stub_vector(image_url, dim)
     if not image_b64:
         return _stub_vector(image_url, dim)
     payload: dict[str, Any] = await client.post_json("", json={"image_b64": image_b64})

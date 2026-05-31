@@ -46,7 +46,7 @@ Non-USD comps (Cardmarket EUR) are converted via `fx_rate` table. Dev defaults i
 See `.env.example` for the full list. Minimum for Weeks 2–5 local dev:
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://tcgscan:tcgscan@localhost:5432/tcgscan
+DATABASE_URL=postgresql+asyncpg://tcgscan:tcgscan@localhost:5433/tcgscan
 QDRANT_URL=http://localhost:6333
 REDIS_URL=redis://localhost:6379
 TEMPORAL_ADDRESS=localhost:7233
@@ -55,3 +55,13 @@ EBAY_OAUTH_TOKEN=
 TCG_API_KEY=
 APIFY_TOKEN=
 ```
+
+## Weeks 6–12 product routes (see `apps/api/docs/endpoints.md`)
+
+| Workflow | Schedule | Module |
+|---|---|---|
+| Alert monitor | Every 15 min | `workflows/alert_workflow.py` → MonitorAgent |
+| Daily digest | Every 24 h | `workflows/digest_workflow.py` → DigestAgent |
+| Scan + embed | On demand | `apps/api/services/scan.py`, `worker/embedding.py` |
+
+**Local demo:** `pnpm db:demo` (migrate + seed + embed Pokemon catalog into Qdrant).

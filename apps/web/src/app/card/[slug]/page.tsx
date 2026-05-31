@@ -123,7 +123,7 @@ export default async function CardDetailPage({ params }: Props) {
           <p className="mt-4 text-sm text-zinc-500">{summary.count} sold comps in the last 30 days</p>
 
           <div className="mt-6">
-            <CardActions cardId={card.id} cardName={card.name} />
+            <CardActions cardId={card.id} cardName={card.name} medianUsd={summary.median_usd} />
           </div>
         </div>
       </div>

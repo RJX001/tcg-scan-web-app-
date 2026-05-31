@@ -65,7 +65,14 @@ async def register_schedules(client: Client) -> None:
         args=[],
         interval=timedelta(minutes=15),
     )
-    log.info("schedules.registered", count=5 + len(CATALOG_GAMES))
+    await _create(
+        client,
+        "digest-daily",
+        "DigestWorkflow",
+        args=[],
+        interval=timedelta(hours=24),
+    )
+    log.info("schedules.registered", count=6 + len(CATALOG_GAMES))
 
 
 async def _create(

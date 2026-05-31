@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from tcgscan_api.errors import AppError
 from tcgscan_api.middleware.auth import AuthMiddleware
-from tcgscan_api.routes import billing, cards, health, portfolio, scan
+from tcgscan_api.routes import billing, cards, health, insights, portfolio, scan
 from tcgscan_api.telemetry import init_observability
 
 
@@ -48,3 +48,4 @@ app.include_router(cards.router, prefix="/v1")
 app.include_router(scan.router, prefix="/v1")
 app.include_router(portfolio.router, prefix="/v1")
 app.include_router(billing.router, prefix="/v1")
+app.include_router(insights.router, prefix="/v1")

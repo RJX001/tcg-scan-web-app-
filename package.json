@@ -13,6 +13,7 @@
     "sdk:generate": "turbo run generate --filter=@tcgscan/sdk-ts",
     "db:migrate": "turbo run db:migrate --filter=@tcgscan/api",
     "db:seed": "turbo run db:seed --filter=@tcgscan/api",
+    "db:demo": "pnpm db:migrate && pnpm db:seed && uv run python -m tcgscan_worker embed:catalog --game pokemon",
     "eval": "turbo run eval --filter=@tcgscan/ml",
     "worker": "turbo run dev --filter=@tcgscan/worker",
     "ingest:catalog": "uv run python -m tcgscan_worker ingest:catalog",

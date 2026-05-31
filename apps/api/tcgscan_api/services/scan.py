@@ -168,6 +168,36 @@ def _rerank(points: list[qm.ScoredPoint], ocr_text: str, ocr_fields: dict[str, o
     return matches
 
 
+async def _catalog_fallback_matches(*, game: str | None, top_k: int) -> list[ScanMatch]:
+    """When Qdrant is empty, return seed catalog cards so local demo still works."""
+    if not game:
+        return []
+    from tcgscan_api.repositories.cards import CardsRepo
+
+    async with get_sessionmaker()() as session:
+        cards = await CardsRepo(session).list_by_game(game, limit=top_k)
+    out: list[ScanMatch] = []
+    for i, card in enumerate(cards):
+        game_val = card.game.value if hasattr(card.game, "value") else str(card.game)
+        slug = card_slug(game_val, card.set_code, card.number)
+        score = max(0.25, 0.5 - i * 0.05)
+        out.append(
+            ScanMatch(
+                card_id=str(card.id),
+                slug=slug,
+                name=card.name,
+                game=game_val,
+                set_code=card.set_code,
+                number=card.number,
+                score=score,
+                cos_sim=score,
+                ocr_boost=1.0,
+                popularity_boost=1.0,
+            )
+        )
+    return out
+
+
 async def run_scan(payload: ScanInput) -> ScanResult:
     key = _cache_key(payload.image_b64)
     cached = await cache_get(key)
@@ -209,6 +239,11 @@ async def run_scan(payload: ScanInput) -> ScanResult:
         stages["ann_search"] = (time.perf_counter() - t2) * 1000
 
         matches = _rerank(points, ocr_text, ocr_fields)
+        if not matches and payload.game_hint:
+            matches = await _catalog_fallback_matches(
+                game=payload.game_hint, top_k=payload.top_k
+            )
+            log.info("scan.catalog_fallback", game=payload.game_hint, count=len(matches))
         condition = ConditionEstimate.model_validate(grade_out)
 
         if matches and condition.psa_high is not None:

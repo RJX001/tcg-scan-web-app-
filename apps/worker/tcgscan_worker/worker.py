@@ -9,6 +9,7 @@ from temporalio.worker import Worker
 from tcgscan_worker.workflows import (
     AlertMonitorWorkflow,
     CatalogIngestWorkflow,
+    DigestWorkflow,
     EbayActiveWorkflow,
     EbaySoldWorkflow,
     MarketplacePricingWorkflow,
@@ -20,6 +21,7 @@ from tcgscan_worker.workflows.activities import (
     activity_ingest_catalog,
     activity_ingest_pricing_batch,
     activity_rollup_daily,
+    activity_run_digests,
 )
 
 log = structlog.get_logger()
@@ -46,6 +48,7 @@ async def run_worker() -> None:
         workflows=[
             AlertMonitorWorkflow,
             CatalogIngestWorkflow,
+            DigestWorkflow,
             EbayActiveWorkflow,
             EbaySoldWorkflow,
             MarketplacePricingWorkflow,
@@ -57,6 +60,7 @@ async def run_worker() -> None:
             activity_rollup_daily,
             activity_ingest_pricing_batch,
             activity_evaluate_alerts,
+            activity_run_digests,
         ],
     )
     log.info("worker.start", task_queue=TASK_QUEUE)

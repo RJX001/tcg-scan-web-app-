@@ -204,6 +204,7 @@ Use this order:
 
 | Date | Update |
 |------|--------|
+| 2026-05-31 | Weeks 6–12 finished: agents wired (grade ROI, monitor, digest), image search, portfolio CSV export, scan catalog fallback, db:demo |
 | 2026-05-26 | Weeks 6–12 code complete: tiers, Stripe scaffold, listings, alert monitor, eval hooks |
 | 2026-05-26 | UI copy: removed “AI” from user-facing text |
 | 2026-05-26 | Local demo verified (web + API, Charizard seed card) |

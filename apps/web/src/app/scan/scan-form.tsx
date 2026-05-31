@@ -2,7 +2,7 @@
 
 import { ConditionPanel } from "@/components/condition-panel";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
-import type { ScanResult } from "@tcgscan/sdk-ts";
+import type { ScanMatch, ScanResult } from "@tcgscan/sdk-ts";
 import { scanCard } from "@tcgscan/sdk-ts";
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
@@ -34,14 +34,16 @@ export function ScanForm() {
   const [game, setGame] = useState("pokemon");
   const [cameraOn, setCameraOn] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [confirmMatch, setConfirmMatch] = useState<string | null>(null);
+  const [selectedMatch, setSelectedMatch] = useState<ScanMatch | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
 
   const runScan = useCallback(
     async (file: File | Blob) => {
       setError(null);
       setResult(null);
-      setConfirmMatch(null);
+      setSelectedMatch(null);
+      setConfirmed(false);
       setPreview(URL.createObjectURL(file));
       setLoading(true);
       setStage("detect");
@@ -52,9 +54,7 @@ export function ScanForm() {
         setResult(out);
         setStage("done");
         const top = out.matches[0];
-        if (top && top.score < 0.55) {
-          setConfirmMatch(top.card_id);
-        }
+        if (top) setSelectedMatch(top);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Scan failed");
         setStage("idle");
@@ -117,6 +117,9 @@ export function ScanForm() {
     grade: "Grading condition…",
     done: "Done",
   };
+
+  const needsConfirm = selectedMatch != null && selectedMatch.score < 0.75 && !confirmed;
+  const selectedSlug = selectedMatch ? (selectedMatch.slug ?? matchSlug(selectedMatch)) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -214,52 +217,66 @@ export function ScanForm() {
 
       {result?.condition.overall != null && <ConditionPanel condition={result.condition} />}
 
-      {confirmMatch && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="pt-4">
-            <p className="text-sm text-amber-900">
-              Low confidence match — please confirm the top result or try another photo.
-            </p>
-            <Button className="mt-2" size="sm" variant="outline" onClick={() => setConfirmMatch(null)}>
-              Got it
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {result && (
+      {result && result.matches.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Matches</CardTitle>
+            <CardTitle>
+              {needsConfirm ? "Confirm your match" : confirmed ? "Match confirmed" : "Top matches"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {result.matches.length === 0 ? (
-              <p className="text-sm text-zinc-600">
-                No matches — run{" "}
-                <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code> and{" "}
-                <code className="rounded bg-zinc-100 px-1">pnpm embed:catalog</code>.
+            {needsConfirm && (
+              <p className="mb-3 text-sm text-amber-800">
+                Confidence is below 75% — tap the correct card below, then confirm.
               </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {result.matches.map((m) => (
+            )}
+            <ul className="flex flex-col gap-2">
+              {result.matches.map((m) => {
+                const isSelected = selectedMatch?.card_id === m.card_id;
+                const slug = m.slug ?? matchSlug(m);
+                return (
                   <li
                     key={m.card_id}
-                    className="flex items-center justify-between rounded-lg border px-3 py-2"
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                      isSelected ? "border-blue-500 bg-blue-50" : "border-zinc-200"
+                    }`}
                   >
-                    <div>
+                    <button
+                      type="button"
+                      className="flex flex-1 flex-col items-start text-left"
+                      onClick={() => {
+                        setSelectedMatch(m);
+                        setConfirmed(false);
+                      }}
+                    >
                       <p className="font-medium">{m.name ?? "Unknown"}</p>
                       <p className="text-xs text-zinc-500">
-                        {(m.score * 100).toFixed(0)}% · OCR ×{(m.ocr_boost ?? 1).toFixed(2)}
+                        {(m.score * 100).toFixed(0)}% match · OCR ×{(m.ocr_boost ?? 1).toFixed(2)}
                       </p>
+                    </button>
+                    <div className="flex gap-2">
+                      {isSelected && !confirmed && (
+                        <Button size="sm" onClick={() => setConfirmed(true)}>
+                          Confirm
+                        </Button>
+                      )}
+                      {slug && (
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/card/${slug}`}>View</Link>
+                        </Button>
+                      )}
                     </div>
-                    {(m.slug ?? matchSlug(m)) && (
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={`/card/${m.slug ?? matchSlug(m)}`}>View</Link>
-                      </Button>
-                    )}
                   </li>
-                ))}
-              </ul>
+                );
+              })}
+            </ul>
+            {confirmed && selectedSlug && (
+              <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-900">
+                Confirmed: <strong>{selectedMatch?.name}</strong>.{" "}
+                <Link href={`/card/${selectedSlug}`} className="font-medium underline">
+                  Open card detail →
+                </Link>
+              </div>
             )}
             {result.stages_ms && (
               <p className="mt-3 text-xs text-zinc-400">
@@ -268,6 +285,18 @@ export function ScanForm() {
                   .join(" · ")}
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {result && result.matches.length === 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-zinc-600">
+              No matches — run{" "}
+              <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code> and{" "}
+              <code className="rounded bg-zinc-100 px-1">pnpm embed:catalog</code>.
+            </p>
           </CardContent>
         </Card>
       )}

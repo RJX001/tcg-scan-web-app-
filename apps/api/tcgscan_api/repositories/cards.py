@@ -64,6 +64,19 @@ class CardsRepo:
         stmt = stmt.order_by(func.length(CardIdentity.name), CardIdentity.name).limit(limit)
         return list((await self._session.execute(stmt)).scalars().all())
 
+    async def list_by_game(self, game: str, *, limit: int = 5) -> list[CardIdentity]:
+        try:
+            game_enum = Game(game)
+        except ValueError:
+            return []
+        stmt = (
+            select(CardIdentity)
+            .where(CardIdentity.game == game_enum)
+            .order_by(CardIdentity.name)
+            .limit(limit)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def upsert_many(self, rows: Iterable[dict[str, object]]) -> int:
         """Insert/update many card_identity rows. Returns number processed."""
         items = list(rows)

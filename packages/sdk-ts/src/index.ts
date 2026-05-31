@@ -276,3 +276,24 @@ export async function openBillingPortal(): Promise<{ url: string }> {
 export async function deleteAlert(alertId: string): Promise<void> {
   await apiFetch<void>(`/v1/alerts/${alertId}`, { method: "DELETE" });
 }
+
+export type DigestPreview = {
+  subject: string;
+  body: string;
+  portfolio_count: number;
+};
+
+export async function getDigestPreview(): Promise<DigestPreview> {
+  return apiFetch<DigestPreview>("/v1/digest/preview");
+}
+
+export async function exportPortfolioCsv(): Promise<Blob> {
+  const res = await fetch(`${baseUrl}/v1/portfolio/export`, {
+    headers: devHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`API error ${res.status}: ${detail}`);
+  }
+  return res.blob();
+}

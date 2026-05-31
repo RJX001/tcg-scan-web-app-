@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
-import { getPortfolio, getPortfolioSummary, removeFromPortfolio } from "@tcgscan/sdk-ts";
+import { exportPortfolioCsv, getPortfolio, getPortfolioSummary, removeFromPortfolio } from "@tcgscan/sdk-ts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -34,6 +34,20 @@ export function PortfolioClient() {
     await load();
   }
 
+  async function exportCsv() {
+    try {
+      const blob = await exportPortfolioCsv();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tcgscan-portfolio.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed");
+    }
+  }
+
   if (loading) return <p className="text-sm text-zinc-500">Loading portfolio…</p>;
   if (error) return <p className="text-sm text-red-600">{error}</p>;
 
@@ -61,8 +75,13 @@ export function PortfolioClient() {
         </Card>
       )}
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Your collection</CardTitle>
+        {items.length > 0 && (
+          <Button size="sm" variant="outline" onClick={() => void exportCsv()}>
+            Export CSV
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (

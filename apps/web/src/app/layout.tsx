@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { DevBanner } from "@/components/dev-banner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,6 +15,7 @@ const NAV = [
   { href: "/search", label: "Search" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/alerts", label: "Alerts" },
+  { href: "/digest", label: "Brief" },
   { href: "/account", label: "Account" },
 ];
 
@@ -21,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <DevBanner />
         <header className="border-b border-zinc-200 bg-white">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
             <Link href="/" className="font-bold text-zinc-900">
