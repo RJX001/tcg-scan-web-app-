@@ -1,4 +1,4 @@
-# TCG Scan — Phase 1 build complete (Weeks 6–12)
+# TCG Scan — Phase 1 (Weeks 1–12 complete)
 
 Price guide for trading cards — scan a card, see cross-marketplace comps, condition estimates, and grading ROI.
 
@@ -6,25 +6,41 @@ Price guide for trading cards — scan a card, see cross-marketplace comps, cond
 
 ```bash
 pnpm install
-docker compose -f infra/docker/docker-compose.yml up -d postgres qdrant
+docker compose -f infra/docker/docker-compose.yml up -d postgres qdrant redis
 uv sync --all-packages
-pnpm db:migrate
-pnpm db:seed
+pnpm db:demo
 pnpm dev --filter @tcgscan/web --filter @tcgscan/api
 ```
 
 Open http://localhost:3000 — demo card: http://localhost:3000/card/pokemon-base1-4-102
 
-## Weeks 6–12 deliverables
+## Weeks 1–12 deliverables
 
-| Week | Status | What's shipped |
-|------|--------|----------------|
-| 6–7 | Done | Scan API: detect/crop, Qdrant ANN, OCR rerank, popularity prior, bbox, condition estimate |
-| 8 | Done | Search, card detail (chart, comps, listings, multi-source tiles, grade ROI) |
-| 9 | Done | Webcam, drag-drop, game selector, low-confidence confirm, bbox overlay |
-| 10 | Done | Portfolio + alerts API/UI, tier gates (10 scans/day, 25 portfolio, alerts=Pro), Stripe checkout scaffold, `/account` |
-| 11 | Done | LangGraph agents + pricing tools wired to API; Temporal alert monitor schedule |
-| 12 | Done | Eval harness (stub + live via `EVAL_API_URL`), Sentry/OTel hooks, beta runbook |
+| Week | Milestone | Status |
+|------|-----------|--------|
+| 1 | Monorepo + infra (pnpm, Turbo, Docker, CI, AGENTS.md) | Done |
+| 2 | Catalog ingest: Pokemon, MTG, Yu-Gi-Oh + embed pipeline | Done (CLI; run with API keys) |
+| 3 | Lorcana, One Piece, Sports + Qdrant index | Done |
+| 4 | eBay active + sold ingest, Temporal workflows, rollups | Done |
+| 5 | TCGPlayer + Cardmarket sources, FX normalization | Done |
+| 6 | Scan API v0: POST `/v1/scan`, Qdrant ANN, Redis cache | Done |
+| 7 | OCR rerank, popularity prior, heuristic grader, bbox | Done |
+| 8 | Search + card detail (chart, comps, listings, ROI) | Done |
+| 9 | Scan UX: webcam, drag-drop, confirm step, bbox overlay | Done |
+| 10 | Auth tiers, portfolio, alerts, Stripe scaffold, `/account` | Done |
+| 11 | LangGraph agents (Scan, Pricing, GradeROI, Monitor, Digest) | Done |
+| 12 | Eval harness, observability hooks, beta runbook | Done |
+
+## Commands
+
+| Command | Purpose |
+|---------|---------|
+| `pnpm db:demo` | Migrate + seed + embed Pokemon into Qdrant |
+| `pnpm ingest:catalog -- --game pokemon` | Ingest catalog from official APIs |
+| `pnpm embed:catalog -- --game pokemon` | Embed catalog images to Qdrant |
+| `pnpm ingest:pricing -- --game pokemon --card-limit 100` | Pull marketplace comps |
+| `pnpm schedules:register` | Register Temporal schedules (needs worker) |
+| `pnpm eval` | ML eval harness (see `apps/ml/eval/README.md`) |
 
 ## Tier model
 
@@ -32,17 +48,15 @@ Open http://localhost:3000 — demo card: http://localhost:3000/card/pokemon-bas
 |------|----------------|
 | 10 scans/day | Unlimited scans |
 | 25 portfolio cards | Unlimited portfolio |
-| Search + public card pages | Price alerts |
-| Condition + ROI on scan | Daily digest (agent scaffold) |
+| Search + public card pages | Price alerts + daily brief |
 
-Set `STRIPE_PRO_PRICE_ID` + Stripe keys to enable checkout. Dev mode uses `X-Dev-User-Id: dev-user`.
+Dev mode: `DEV_AUTH_ENABLED=true` + header `X-Dev-User-Id: dev-user` (seed sets Pro tier).
 
-## Production checklist (post-code)
+## Production checklist (requires your API keys)
 
-- [ ] Deploy Modal ML endpoints + populate Qdrant with real embeddings
-- [ ] Add Clerk keys for production auth
-- [ ] Configure Stripe webhook → `/v1/billing/webhook`
-- [ ] Run pricing ingest schedules (`pnpm worker`, `pnpm schedules:register`)
-- [ ] Closed beta (25 users) per `docs/runbooks/beta-launch.md`
+- [ ] Deploy Modal ML (`MODAL_*_URL`) + full catalog embed
+- [ ] Clerk keys + Stripe webhook
+- [ ] eBay / TCG / Apify keys for live pricing
+- [ ] Closed beta per `docs/runbooks/beta-launch.md`
 
-See [AGENTS.md](./AGENTS.md), [docs/TCG_Scan_Phase1.md](./docs/TCG_Scan_Phase1.md), and **[docs/PROJECT_TRACKING.md](./docs/PROJECT_TRACKING.md)** for full status.
+See [AGENTS.md](./AGENTS.md), [docs/TCG_Scan_Phase1.md](./docs/TCG_Scan_Phase1.md), [docs/PROJECT_TRACKING.md](./docs/PROJECT_TRACKING.md).

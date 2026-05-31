@@ -27,12 +27,24 @@ async def test_portfolio_requires_auth_when_dev_disabled(
 @pytest.mark.asyncio
 async def test_portfolio_dev_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     from tcgscan_api.config import get_settings
+    from tcgscan_api.middleware.auth import AuthUser
     from tcgscan_api.routes import portfolio as portfolio_routes
 
     async def fake_list(*_a: object, **_k: object) -> list[object]:
         return []
 
+    async def fake_resolve(_session: object, _request: object) -> AuthUser:
+        import uuid
+
+        return AuthUser(
+            id=uuid.UUID("11111111-1111-4111-8111-111111111111"),
+            clerk_id="test-user",
+            tier="free",
+            email=None,
+        )
+
     monkeypatch.setattr(portfolio_routes, "list_portfolio", fake_list)
+    monkeypatch.setattr(portfolio_routes, "resolve_db_user", fake_resolve)
     get_settings.cache_clear()
     monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
     get_settings.cache_clear()

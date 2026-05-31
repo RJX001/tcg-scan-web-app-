@@ -1,4 +1,5 @@
 import { CardActions } from "@/components/card-actions";
+import { CompsTable } from "@/components/comps-table";
 import { PriceChart } from "@/components/price-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import type { CardOut, CompOut, CompSummary, GradeVerdict, SourcePrices } from "@tcgscan/sdk-ts";
@@ -33,6 +34,11 @@ function PriceTile({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
   );
+}
+
+function popReportUrl(card: CardOut): string {
+  const q = encodeURIComponent(`${card.name} ${card.set_name ?? card.set_code ?? ""}`.trim());
+  return `https://www.psacard.com/pop/search?q=${q}`;
 }
 
 function fmtUsd(n: number | null | undefined) {
@@ -122,6 +128,17 @@ export default async function CardDetailPage({ params }: Props) {
 
           <p className="mt-4 text-sm text-zinc-500">{summary.count} sold comps in the last 30 days</p>
 
+          <p className="mt-2 text-sm">
+            <a
+              href={popReportUrl(card)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              PSA pop report →
+            </a>
+          </p>
+
           <div className="mt-6">
             <CardActions cardId={card.id} cardName={card.name} medianUsd={summary.median_usd} />
           </div>
@@ -198,34 +215,7 @@ export default async function CardDetailPage({ params }: Props) {
           <CardTitle>Sold comps (90 days)</CardTitle>
         </CardHeader>
         <CardContent>
-          {comps.length === 0 ? (
-            <p className="text-sm text-zinc-600">
-              No comps yet. Run <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code>.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-zinc-500">
-                    <th className="py-2 pr-4">Date</th>
-                    <th className="py-2 pr-4">Price</th>
-                    <th className="py-2 pr-4">Grade</th>
-                    <th className="py-2">Source</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comps.map((c, i) => (
-                    <tr key={`${c.sold_at}-${i}`} className="border-b border-zinc-100">
-                      <td className="py-2 pr-4">{new Date(c.sold_at).toLocaleDateString()}</td>
-                      <td className="py-2 pr-4 font-medium">{fmtUsd(c.price)}</td>
-                      <td className="py-2 pr-4">{c.grade ?? "raw"}</td>
-                      <td className="py-2">{c.source}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <CompsTable comps={comps} />
         </CardContent>
       </Card>
     </main>
