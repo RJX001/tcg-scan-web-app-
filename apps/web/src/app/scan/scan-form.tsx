@@ -303,12 +303,22 @@ export function ScanForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Demo card</CardTitle>
+          <CardTitle>Demo cards</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Button asChild variant="outline">
-            <Link href="/card/pokemon-base1-4-102">Charizard — Base Set 4/102</Link>
-          </Button>
+        <CardContent className="flex flex-wrap gap-2">
+          {[
+            ["pokemon-base1-4-102", "Charizard 4/102"],
+            ["pokemon-base1-2-102", "Blastoise 2/102"],
+            ["pokemon-base1-15-102", "Venusaur 15/102"],
+            ["pokemon-base1-58-102", "Pikachu 58/102"],
+            ["pokemon-base1-10-102", "Mewtwo 10/102"],
+            ["pokemon-base1-1-102", "Alakazam 1/102"],
+            ["pokemon-base1-6-102", "Gyarados 6/102"],
+          ].map(([slug, label]) => (
+            <Button key={slug} asChild variant="outline" size="sm">
+              <Link href={`/card/${slug}`}>{label}</Link>
+            </Button>
+          ))}
         </CardContent>
       </Card>
     </div>

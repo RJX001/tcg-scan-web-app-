@@ -16,8 +16,29 @@ from tcgscan_api.services.slug import card_slug
 
 # Stable UUIDs for dev fixtures
 CHARIZARD_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
+BLASTOISE_ID = uuid.UUID("44444444-4444-4444-8444-444444444444")
+VENUSAUR_ID = uuid.UUID("55555555-5555-4555-8555-555555555555")
 PIKACHU_ID = uuid.UUID("22222222-2222-4222-8222-222222222222")
 MEWTWO_ID = uuid.UUID("33333333-3333-4333-8333-333333333333")
+ALAKAZAM_ID = uuid.UUID("66666666-6666-4666-8666-666666666666")
+GYARADOS_ID = uuid.UUID("77777777-7777-4777-8777-777777777777")
+
+# (card_id, ebay_base_usd, tcgplayer_usd, cardmarket_usd)
+PRICES: dict[uuid.UUID, tuple[Decimal, Decimal, Decimal]] = {
+    CHARIZARD_ID: (Decimal("275.00"), Decimal("289.00"), Decimal("248.00")),
+    BLASTOISE_ID: (Decimal("145.00"), Decimal("152.00"), Decimal("138.00")),
+    VENUSAUR_ID: (Decimal("125.00"), Decimal("131.00"), Decimal("119.00")),
+    PIKACHU_ID: (Decimal("4.50"), Decimal("5.25"), Decimal("4.80")),
+    MEWTWO_ID: (Decimal("45.00"), Decimal("48.00"), Decimal("42.00")),
+    ALAKAZAM_ID: (Decimal("38.00"), Decimal("41.00"), Decimal("36.00")),
+    GYARADOS_ID: (Decimal("52.00"), Decimal("55.00"), Decimal("49.00")),
+}
+
+
+def _pokemon_image(set_code: str, card_num: int) -> dict[str, str]:
+    base = f"https://images.pokemontcg.io/{set_code}/{card_num}"
+    return {"front": f"{base}_hires.png", "small": f"{base}.png"}
+
 
 CARDS: list[dict[str, object]] = [
     {
@@ -28,12 +49,33 @@ CARDS: list[dict[str, object]] = [
         "set_name": "Base Set",
         "number": "4/102",
         "rarity": "Rare Holo",
-        "image_urls": {
-            "front": "https://images.pokemontcg.io/base1/4_hires.png",
-            "small": "https://images.pokemontcg.io/base1/4.png",
-        },
+        "image_urls": _pokemon_image("base1", 4),
         "attributes": {"hp": "120", "type": "Fire"},
         "external_ids": {"pokemontcg": "base1-4"},
+    },
+    {
+        "id": BLASTOISE_ID,
+        "game": Game.pokemon,
+        "name": "Blastoise",
+        "set_code": "base1",
+        "set_name": "Base Set",
+        "number": "2/102",
+        "rarity": "Rare Holo",
+        "image_urls": _pokemon_image("base1", 2),
+        "attributes": {"hp": "100", "type": "Water"},
+        "external_ids": {"pokemontcg": "base1-2"},
+    },
+    {
+        "id": VENUSAUR_ID,
+        "game": Game.pokemon,
+        "name": "Venusaur",
+        "set_code": "base1",
+        "set_name": "Base Set",
+        "number": "15/102",
+        "rarity": "Rare Holo",
+        "image_urls": _pokemon_image("base1", 15),
+        "attributes": {"hp": "100", "type": "Grass"},
+        "external_ids": {"pokemontcg": "base1-15"},
     },
     {
         "id": PIKACHU_ID,
@@ -43,10 +85,7 @@ CARDS: list[dict[str, object]] = [
         "set_name": "Base Set",
         "number": "58/102",
         "rarity": "Common",
-        "image_urls": {
-            "front": "https://images.pokemontcg.io/base1/58_hires.png",
-            "small": "https://images.pokemontcg.io/base1/58.png",
-        },
+        "image_urls": _pokemon_image("base1", 58),
         "attributes": {"hp": "40", "type": "Lightning"},
         "external_ids": {"pokemontcg": "base1-58"},
     },
@@ -58,21 +97,53 @@ CARDS: list[dict[str, object]] = [
         "set_name": "Base Set",
         "number": "10/102",
         "rarity": "Rare Holo",
-        "image_urls": {
-            "front": "https://images.pokemontcg.io/base1/10_hires.png",
-            "small": "https://images.pokemontcg.io/base1/10.png",
-        },
+        "image_urls": _pokemon_image("base1", 10),
         "attributes": {"hp": "60", "type": "Psychic"},
         "external_ids": {"pokemontcg": "base1-10"},
     },
+    {
+        "id": ALAKAZAM_ID,
+        "game": Game.pokemon,
+        "name": "Alakazam",
+        "set_code": "base1",
+        "set_name": "Base Set",
+        "number": "1/102",
+        "rarity": "Rare Holo",
+        "image_urls": _pokemon_image("base1", 1),
+        "attributes": {"hp": "80", "type": "Psychic"},
+        "external_ids": {"pokemontcg": "base1-1"},
+    },
+    {
+        "id": GYARADOS_ID,
+        "game": Game.pokemon,
+        "name": "Gyarados",
+        "set_code": "base1",
+        "set_name": "Base Set",
+        "number": "6/102",
+        "rarity": "Rare Holo",
+        "image_urls": _pokemon_image("base1", 6),
+        "attributes": {"hp": "100", "type": "Water"},
+        "external_ids": {"pokemontcg": "base1-6"},
+    },
+]
+
+DEMO_SLUGS = [
+    card_slug(Game.pokemon, "base1", "4/102"),
+    card_slug(Game.pokemon, "base1", "2/102"),
+    card_slug(Game.pokemon, "base1", "15/102"),
+    card_slug(Game.pokemon, "base1", "58/102"),
+    card_slug(Game.pokemon, "base1", "10/102"),
 ]
 
 
 def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, object]]:
     now = datetime.now(timezone.utc)
     rows: list[dict[str, object]] = []
+    prices = PRICES.get(card_id, (base_price, base_price, base_price))
+    ebay_base, tcg_base, cm_base = prices
+
     for i in range(8):
-        price = base_price + Decimal(str(i * 3.5))
+        price = ebay_base + Decimal(str(i * 3.5))
         rows.append(
             {
                 "card_id": card_id,
@@ -88,20 +159,58 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
                 "raw_payload": {"seed": True},
             }
         )
+
+    for i in range(3):
+        price = tcg_base + Decimal(str(i * 2))
+        rows.append(
+            {
+                "card_id": card_id,
+                "source": "tcgplayer",
+                "kind": SaleKind.sold,
+                "sold_at": now - timedelta(days=i * 3 + 2),
+                "price": price,
+                "currency": "USD",
+                "price_usd": price,
+                "grade": "raw",
+                "condition": "Near Mint",
+                "listing_url": f"https://tcgplayer.com/seed-{card_id}-{i}",
+                "raw_payload": {"seed": True},
+            }
+        )
+
+    for i in range(2):
+        price = cm_base + Decimal(str(i * 2.5))
+        rows.append(
+            {
+                "card_id": card_id,
+                "source": "cardmarket",
+                "kind": SaleKind.sold,
+                "sold_at": now - timedelta(days=i * 4 + 1),
+                "price": price,
+                "currency": "EUR",
+                "price_usd": price,
+                "grade": "raw",
+                "condition": "Near Mint",
+                "listing_url": f"https://cardmarket.com/seed-{card_id}-{i}",
+                "raw_payload": {"seed": True},
+            }
+        )
     return rows
 
 
-def _sample_listings(card_id: uuid.UUID) -> list[dict[str, object]]:
+def _sample_listings(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, object]]:
     now = datetime.now(timezone.utc)
+    low = base_price * Decimal("0.95")
+    high = base_price * Decimal("1.08")
     return [
         {
             "card_id": card_id,
             "source": "ebay",
             "kind": SaleKind.listing,
             "sold_at": now,
-            "price": Decimal("265.00"),
+            "price": low,
             "currency": "USD",
-            "price_usd": Decimal("265.00"),
+            "price_usd": low,
             "grade": "raw",
             "listing_url": f"https://ebay.com/itm/listing-{card_id}-1",
             "raw_payload": {"seed": True, "active": True},
@@ -111,9 +220,9 @@ def _sample_listings(card_id: uuid.UUID) -> list[dict[str, object]]:
             "source": "ebay",
             "kind": SaleKind.listing,
             "sold_at": now,
-            "price": Decimal("289.99"),
+            "price": high,
             "currency": "USD",
-            "price_usd": Decimal("289.99"),
+            "price_usd": high,
             "grade": "PSA 9",
             "listing_url": f"https://ebay.com/itm/listing-{card_id}-2",
             "raw_payload": {"seed": True, "active": True},
@@ -122,24 +231,31 @@ def _sample_listings(card_id: uuid.UUID) -> list[dict[str, object]]:
 
 
 async def seed_async() -> None:
+    card_ids = [c["id"] for c in CARDS]
+    assert all(isinstance(cid, uuid.UUID) for cid in card_ids)
+
     async with get_sessionmaker()() as session:
         await CardsRepo(session).upsert_many(CARDS)
-        sales = (
-            _sample_sales(CHARIZARD_ID, Decimal("275.00"))
-            + _sample_sales(PIKACHU_ID, Decimal("4.50"))
-            + _sample_sales(MEWTWO_ID, Decimal("45.00"))
-        )
-        await SalesRepo(session).bulk_insert(sales)
 
-        listings = _sample_listings(CHARIZARD_ID) + _sample_listings(PIKACHU_ID)
+        sales: list[dict[str, object]] = []
+        listings: list[dict[str, object]] = []
+        for card in CARDS:
+            cid = card["id"]
+            assert isinstance(cid, uuid.UUID)
+            ebay_base = PRICES.get(cid, (Decimal("10.00"), Decimal("10.00"), Decimal("10.00")))[0]
+            sales.extend(_sample_sales(cid, ebay_base))
+            if cid in (CHARIZARD_ID, BLASTOISE_ID, PIKACHU_ID, MEWTWO_ID):
+                listings.extend(_sample_listings(cid, ebay_base))
+
+        await SalesRepo(session).bulk_insert(sales)
         await SalesRepo(session).bulk_insert(listings)
 
-        # Daily rollups for chart demo
         now = datetime.now(timezone.utc)
-        for card_id in (CHARIZARD_ID, PIKACHU_ID, MEWTWO_ID):
+        for cid in card_ids:
+            assert isinstance(cid, uuid.UUID)
             for d in range(30):
                 day = now - timedelta(days=d)
-                await SalesRepo(session).rollup_day(card_id, day)
+                await SalesRepo(session).rollup_day(cid, day)
 
         dev_user = await UsersRepo(session).get_or_create(
             clerk_id="dev-user", email="dev@localhost"
@@ -147,9 +263,11 @@ async def seed_async() -> None:
         if dev_user.tier != UserTier.pro:
             await UsersRepo(session).set_tier(dev_user.id, UserTier.pro)
 
-    print("db:seed — inserted 3 Pokemon cards + sample comps, listings + daily rollups")
+    print(f"db:seed — inserted {len(CARDS)} Pokemon cards + comps, listings + daily rollups")
     print("  dev-user tier: pro (alerts + digest enabled)")
-    print(f"  demo slug: {card_slug(Game.pokemon, 'base1', '4/102')}")
+    print("  demo slugs:")
+    for slug in DEMO_SLUGS:
+        print(f"    /card/{slug}")
 
 
 def main() -> None:

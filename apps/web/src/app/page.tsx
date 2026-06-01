@@ -72,7 +72,28 @@ export default function LandingPage() {
           <a href="http://localhost:8000/v1/health" className="text-blue-600 underline">
             localhost:8000
           </a>{" "}
-          · Seed data includes Charizard, Pikachu, and Mewtwo with 90-day price history.
+          · Base Set seed cards with 30-day comps across eBay, TCGPlayer, and Cardmarket.
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Demo cards</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap justify-center gap-2">
+          {[
+            ["pokemon-base1-4-102", "Charizard"],
+            ["pokemon-base1-2-102", "Blastoise"],
+            ["pokemon-base1-15-102", "Venusaur"],
+            ["pokemon-base1-58-102", "Pikachu"],
+            ["pokemon-base1-10-102", "Mewtwo"],
+            ["pokemon-base1-1-102", "Alakazam"],
+            ["pokemon-base1-6-102", "Gyarados"],
+          ].map(([slug, name]) => (
+            <Button key={slug} asChild variant="outline" size="sm">
+              <Link href={`/card/${slug}`}>{name}</Link>
+            </Button>
+          ))}
         </CardContent>
       </Card>
     </main>
