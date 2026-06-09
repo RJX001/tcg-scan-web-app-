@@ -85,9 +85,10 @@ async def card_listings(
     card_id: uuid.UUID,
     limit: int = Query(default=20, ge=1, le=100),
     source: str | None = None,
+    grade: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[ListingOut]:
-    return await get_listings(session, card_id, limit=limit, source=source)
+    return await get_listings(session, card_id, limit=limit, source=source, grade=grade)
 
 
 @router.get("/{card_id}/comps/summary/by-grade", response_model=CompSummaryByGrade)

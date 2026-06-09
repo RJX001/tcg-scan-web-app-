@@ -65,6 +65,7 @@ class SalesRepo:
         *,
         limit: int = 20,
         source: str | None = None,
+        grade: str | None = None,
     ) -> list[SaleEvent]:
         from tcgscan_api.db.models import SaleKind
 
@@ -76,6 +77,13 @@ class SalesRepo:
         )
         if source:
             stmt = stmt.where(SaleEvent.source == source)
+        if grade:
+            if grade.lower() == "raw":
+                stmt = stmt.where(
+                    (SaleEvent.grade.is_(None)) | (SaleEvent.grade.in_(["raw", "RAW", "None", ""]))
+                )
+            else:
+                stmt = stmt.where(SaleEvent.grade.ilike(f"%{grade}%"))
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def chart_series(

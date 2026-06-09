@@ -136,6 +136,10 @@ DEMO_SLUGS = [
 ]
 
 
+SOLD_GRADES = ("raw", "PSA 9", "BGS 9.5", "CGC 9", "ACE 10")
+LISTING_GRADES = ("raw", "PSA 9", "BGS 9.5", "CGC 9", "ACE 10")
+
+
 def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, object]]:
     now = datetime.now(timezone.utc)
     rows: list[dict[str, object]] = []
@@ -144,6 +148,7 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
 
     for i in range(8):
         price = ebay_base + Decimal(str(i * 3.5))
+        grade = SOLD_GRADES[i % len(SOLD_GRADES)]
         rows.append(
             {
                 "card_id": card_id,
@@ -153,7 +158,7 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
                 "price": price,
                 "currency": "USD",
                 "price_usd": price,
-                "grade": "raw" if i % 3 else "PSA 9",
+                "grade": grade,
                 "condition": "Near Mint",
                 "listing_url": f"https://ebay.com/itm/seed-{card_id}-{i}",
                 "raw_payload": {"seed": True},
@@ -162,6 +167,7 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
 
     for i in range(3):
         price = tcg_base + Decimal(str(i * 2))
+        grade = SOLD_GRADES[(i + 1) % len(SOLD_GRADES)]
         rows.append(
             {
                 "card_id": card_id,
@@ -171,7 +177,7 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
                 "price": price,
                 "currency": "USD",
                 "price_usd": price,
-                "grade": "raw",
+                "grade": grade,
                 "condition": "Near Mint",
                 "listing_url": f"https://tcgplayer.com/seed-{card_id}-{i}",
                 "raw_payload": {"seed": True},
@@ -180,6 +186,7 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
 
     for i in range(2):
         price = cm_base + Decimal(str(i * 2.5))
+        grade = SOLD_GRADES[(i + 2) % len(SOLD_GRADES)]
         rows.append(
             {
                 "card_id": card_id,
@@ -189,10 +196,29 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
                 "price": price,
                 "currency": "EUR",
                 "price_usd": price,
-                "grade": "raw",
+                "grade": grade,
                 "condition": "Near Mint",
-                "listing_url": f"https://cardmarket.com/seed-{card_id}-{i}",
+                "listing_url": f"https://www.cardmarket.com/en/Pokemon/seed-{card_id}-{i}",
                 "raw_payload": {"seed": True},
+            }
+        )
+
+    for i in range(2):
+        price = ebay_base * Decimal("0.82") + Decimal(str(i * 2))
+        grade = SOLD_GRADES[i % len(SOLD_GRADES)]
+        rows.append(
+            {
+                "card_id": card_id,
+                "source": "ebay",
+                "kind": SaleKind.sold,
+                "sold_at": now - timedelta(days=i * 5 + 3),
+                "price": price,
+                "currency": "GBP",
+                "price_usd": price * Decimal("1.27"),
+                "grade": grade,
+                "condition": "Near Mint",
+                "listing_url": f"https://www.ebay.co.uk/itm/seed-{card_id}-uk-{i}",
+                "raw_payload": {"seed": True, "marketplace_id": "EBAY_GB"},
             }
         )
     return rows
@@ -200,34 +226,32 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
 
 def _sample_listings(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, object]]:
     now = datetime.now(timezone.utc)
-    low = base_price * Decimal("0.95")
-    high = base_price * Decimal("1.08")
-    return [
-        {
-            "card_id": card_id,
-            "source": "ebay",
-            "kind": SaleKind.listing,
-            "sold_at": now,
-            "price": low,
-            "currency": "USD",
-            "price_usd": low,
-            "grade": "raw",
-            "listing_url": f"https://ebay.com/itm/listing-{card_id}-1",
-            "raw_payload": {"seed": True, "active": True},
-        },
-        {
-            "card_id": card_id,
-            "source": "ebay",
-            "kind": SaleKind.listing,
-            "sold_at": now,
-            "price": high,
-            "currency": "USD",
-            "price_usd": high,
-            "grade": "PSA 9",
-            "listing_url": f"https://ebay.com/itm/listing-{card_id}-2",
-            "raw_payload": {"seed": True, "active": True},
-        },
-    ]
+    rows: list[dict[str, object]] = []
+    regional = (
+        ("us", "ebay", "USD", f"https://www.ebay.com/itm/listing-{card_id}-us"),
+        ("us", "tcgplayer", "USD", f"https://www.tcgplayer.com/product/seed-{card_id}"),
+        ("uk", "ebay", "GBP", f"https://www.ebay.co.uk/itm/listing-{card_id}-uk"),
+        ("eu", "cardmarket", "EUR", f"https://www.cardmarket.com/en/Pokemon/listing-{card_id}-eu"),
+    )
+    for i, grade in enumerate(LISTING_GRADES):
+        _region, source, currency, url = regional[i % len(regional)]
+        multiplier = Decimal("0.92") + Decimal(str(i)) * Decimal("0.04")
+        price = base_price * multiplier
+        rows.append(
+            {
+                "card_id": card_id,
+                "source": source,
+                "kind": SaleKind.listing,
+                "sold_at": now,
+                "price": price,
+                "currency": currency,
+                "price_usd": price,
+                "grade": grade,
+                "listing_url": url,
+                "raw_payload": {"seed": True, "active": True},
+            }
+        )
+    return rows
 
 
 async def seed_async() -> None:

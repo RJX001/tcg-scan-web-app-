@@ -1,5 +1,6 @@
 import { CardActions } from "@/components/card-actions";
 import { CompsTable } from "@/components/comps-table";
+import { ListingsTable } from "@/components/listings-table";
 import { PriceChart } from "@/components/price-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import type { CardOut, CompOut, CompSummary, GradeVerdict, SourcePrices } from "@tcgscan/sdk-ts";
@@ -78,7 +79,7 @@ export default async function CardDetailPage({ params }: Props) {
       getCompSummary(card.id, 30),
       getChart(card.id, 90),
       getSourcePrices(card.id, 30),
-      getListings(card.id, 10),
+      getListings(card.id, 50),
     ]);
     try {
       roi = await getGradeRoi(card.id, 9);
@@ -170,43 +171,7 @@ export default async function CardDetailPage({ params }: Props) {
           <CardTitle>Active listings</CardTitle>
         </CardHeader>
         <CardContent>
-          {listings.length === 0 ? (
-            <p className="text-sm text-zinc-600">No active listings in the database yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-zinc-500">
-                    <th className="py-2 pr-4">Price</th>
-                    <th className="py-2 pr-4">Grade</th>
-                    <th className="py-2">Source</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {listings.map((row, i) => (
-                    <tr key={`${row.listed_at}-${i}`} className="border-b border-zinc-100">
-                      <td className="py-2 pr-4 font-medium">
-                        {row.listing_url ? (
-                          <a
-                            href={row.listing_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            {fmtUsd(row.price)}
-                          </a>
-                        ) : (
-                          fmtUsd(row.price)
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">{row.grade ?? "raw"}</td>
-                      <td className="py-2">{row.source}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <ListingsTable listings={listings} />
         </CardContent>
       </Card>
 

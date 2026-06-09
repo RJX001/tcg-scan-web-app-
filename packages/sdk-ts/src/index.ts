@@ -72,6 +72,7 @@ export type CompOut = {
   currency: string;
   grade?: string | null;
   listing_url?: string | null;
+  market_region: string;
 };
 
 export type CompSummary = {
@@ -119,6 +120,7 @@ export type ListingOut = {
   grade?: string | null;
   listing_url?: string | null;
   listed_at: string;
+  market_region: string;
 };
 
 export type PortfolioSummaryOut = {
@@ -253,8 +255,15 @@ export async function createAlert(body: {
   });
 }
 
-export async function getListings(cardId: string, limit = 20): Promise<ListingOut[]> {
-  return apiFetch<ListingOut[]>(`/v1/cards/${cardId}/listings?limit=${limit}`);
+export async function getListings(
+  cardId: string,
+  limit = 20,
+  opts?: { source?: string; grade?: string },
+): Promise<ListingOut[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (opts?.source) params.set("source", opts.source);
+  if (opts?.grade) params.set("grade", opts.grade);
+  return apiFetch<ListingOut[]>(`/v1/cards/${cardId}/listings?${params}`);
 }
 
 export async function getPortfolioSummary(): Promise<PortfolioSummaryOut> {

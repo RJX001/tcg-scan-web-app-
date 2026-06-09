@@ -9,6 +9,7 @@ from tcgscan_api.db.models import CardIdentity
 from tcgscan_api.errors import NotFoundError
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.sales import SalesRepo
+from tcgscan_api.services.market_region import infer_market_region
 from tcgscan_api.services.slug import card_slug_from_identity
 
 
@@ -32,6 +33,7 @@ class CompOut(BaseModel):
     currency: str
     grade: str | None = None
     listing_url: str | None = None
+    market_region: str
 
 
 class ListingOut(BaseModel):
@@ -41,6 +43,7 @@ class ListingOut(BaseModel):
     grade: str | None = None
     listing_url: str | None = None
     listed_at: str
+    market_region: str
 
 
 class CompSummary(BaseModel):
@@ -116,6 +119,9 @@ async def get_comps(
             currency=r.currency,
             grade=r.grade,
             listing_url=r.listing_url,
+            market_region=infer_market_region(
+                source=r.source, currency=r.currency, listing_url=r.listing_url
+            ),
         )
         for r in rows
     ]
@@ -196,9 +202,16 @@ async def get_source_prices(session: AsyncSession, card_id: uuid.UUID, days: int
 
 
 async def get_listings(
-    session: AsyncSession, card_id: uuid.UUID, *, limit: int = 20, source: str | None = None
+    session: AsyncSession,
+    card_id: uuid.UUID,
+    *,
+    limit: int = 20,
+    source: str | None = None,
+    grade: str | None = None,
 ) -> list[ListingOut]:
-    rows = await SalesRepo(session).listings_for_card(card_id, limit=limit, source=source)
+    rows = await SalesRepo(session).listings_for_card(
+        card_id, limit=limit, source=source, grade=grade
+    )
     return [
         ListingOut(
             source=r.source,
@@ -207,6 +220,9 @@ async def get_listings(
             grade=r.grade,
             listing_url=r.listing_url,
             listed_at=r.sold_at.isoformat(),
+            market_region=infer_market_region(
+                source=r.source, currency=r.currency, listing_url=r.listing_url
+            ),
         )
         for r in rows
     ]

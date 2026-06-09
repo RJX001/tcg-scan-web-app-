@@ -1,6 +1,8 @@
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 const FEATURES = [
   {
     title: "Scan any card",
@@ -69,8 +71,8 @@ export default function LandingPage() {
       <Card className="border-blue-100 bg-blue-50/50">
         <CardContent className="pt-6 text-center text-sm text-zinc-700">
           <strong>Local demo:</strong> API at{" "}
-          <a href="http://localhost:8000/v1/health" className="text-blue-600 underline">
-            localhost:8000
+          <a href={`${API_URL}/v1/health`} className="text-blue-600 underline">
+            {API_URL.replace(/^https?:\/\//, "")}
           </a>{" "}
           · Base Set seed cards with 30-day comps across eBay, TCGPlayer, and Cardmarket.
         </CardContent>

@@ -7,8 +7,9 @@ from dataclasses import dataclass
 
 _GRADE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("PSA", re.compile(r"\bPSA\s*(\d+(?:\.\d+)?)\b", re.I)),
-    ("BGS", re.compile(r"\bBGS\s*(\d+(?:\.\d+)?)\b", re.I)),
+    ("BGS", re.compile(r"\b(?:BGS|BECKETT)\s*(\d+(?:\.\d+)?)\b", re.I)),
     ("CGC", re.compile(r"\bCGC\s*(\d+(?:\.\d+)?)\b", re.I)),
+    ("ACE", re.compile(r"\bACE\s*(\d+(?:\.\d+)?)\b", re.I)),
     ("SGC", re.compile(r"\bSGC\s*(\d+(?:\.\d+)?)\b", re.I)),
 ]
 
