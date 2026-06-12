@@ -14,8 +14,13 @@ import {
   type MarketRegionFilter,
 } from "@/lib/market-regions";
 
-function fmtUsd(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+/** Comps carry their source currency (eBay USD, Cardmarket EUR, …) — show it honestly. */
+function fmtNative(n: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
+  } catch {
+    return `${currency} ${n.toFixed(2)}`;
+  }
 }
 
 type Props = {
@@ -97,10 +102,10 @@ export function CompsTable({ comps }: Props) {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
                     >
-                      {fmtUsd(c.price)}
+                      {fmtNative(c.price, c.currency)}
                     </a>
                   ) : (
-                    fmtUsd(c.price)
+                    fmtNative(c.price, c.currency)
                   )}
                 </td>
                 <td className="py-2 pr-4">{c.grade ?? "raw"}</td>

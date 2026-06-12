@@ -27,6 +27,7 @@ from tcgscan_api.services.cards import (
     search_cards,
 )
 from tcgscan_api.services.grade_roi import GradeVerdict, compute_verdict
+from tcgscan_api.services.market import PopulationOut, get_population
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -126,6 +127,13 @@ async def card_source_prices(
     session: AsyncSession = Depends(get_session),
 ) -> SourcePrices:
     return await get_source_prices(session, card_id, days=days)
+
+
+@router.get("/{card_id}/population", response_model=PopulationOut)
+async def card_population(
+    card_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> PopulationOut:
+    return await get_population(session, card_id)
 
 
 @router.get("/{card_id}/grade-roi", response_model=GradeVerdict)

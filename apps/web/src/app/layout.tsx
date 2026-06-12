@@ -1,46 +1,98 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { BottomNav } from "@/components/bottom-nav";
 import { DevBanner } from "@/components/dev-banner";
+import { PwaRegister } from "@/components/pwa-register";
+import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TCG Scan — Price guide for every card",
   description:
     "Scan any trading card. See cross-marketplace comps, condition estimates, and grading ROI.",
+  applicationName: "TCG Scan",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "TCG Scan",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#1d4ed8",
+  viewportFit: "cover",
 };
 
 const NAV = [
-  { href: "/", label: "Home" },
+  { href: "/shop", label: "Shop" },
+  { href: "/ladder", label: "Ladder" },
   { href: "/scan", label: "Scan" },
-  { href: "/search", label: "Search" },
-  { href: "/portfolio", label: "Portfolio" },
-  { href: "/alerts", label: "Alerts" },
-  { href: "/digest", label: "Brief" },
-  { href: "/account", label: "Account" },
+  { href: "/showcase", label: "Showcase" },
+  { href: "/sales", label: "Sales" },
+  { href: "/indexes", label: "Indexes" },
+  { href: "/portfolio", label: "Collection" },
+  { href: "/more", label: "More" },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className="bg-zinc-50 text-zinc-900 antialiased">
+        <CurrencyProvider>
+        <PwaRegister />
         <DevBanner />
-        <header className="border-b border-zinc-200 bg-white">
+        <header className="sticky top-0 z-30 hidden border-b border-zinc-200 bg-white/95 backdrop-blur sm:block">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <Link href="/" className="font-bold text-zinc-900">
-              TCG Scan
+            <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
+              TCG<span className="text-blue-700">Scan</span>
             </Link>
-            <ul className="flex gap-4 text-sm">
+            <ul className="flex items-center gap-5 text-sm">
               {NAV.map((item) => (
                 <li key={item.href}>
-                  <Link href={item.href} className="text-zinc-600 hover:text-zinc-900">
+                  <Link
+                    href={item.href}
+                    className={
+                      item.href === "/scan"
+                        ? "rounded-full bg-blue-700 px-4 py-1.5 font-semibold text-white hover:bg-blue-800"
+                        : "font-medium text-zinc-600 hover:text-zinc-900"
+                    }
+                  >
                     {item.label}
                   </Link>
                 </li>
               ))}
+              <li>
+                <CurrencySelect />
+              </li>
             </ul>
           </nav>
         </header>
-        {children}
+        <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur sm:hidden">
+          <div className="flex items-center justify-between px-4 py-3">
+            <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
+              TCG<span className="text-blue-700">Scan</span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <CurrencySelect />
+              <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </header>
+        <div className="pb-24 sm:pb-0">{children}</div>
+        <BottomNav />
+        </CurrencyProvider>
       </body>
     </html>
   );

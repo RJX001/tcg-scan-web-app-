@@ -286,6 +286,251 @@ export async function deleteAlert(alertId: string): Promise<void> {
   await apiFetch<void>(`/v1/alerts/${alertId}`, { method: "DELETE" });
 }
 
+export type MarketMoverOut = {
+  card: CardOut;
+  sales_count: number;
+  avg_usd?: number | null;
+  change_pct?: number | null;
+  last_sold_usd?: number | null;
+  last_sold_at?: string | null;
+  last_sold_grade?: string | null;
+  pop_count?: number | null;
+};
+
+export type IndexPoint = {
+  day: string;
+  index_value: number;
+  constituents: number;
+};
+
+export type MarketIndexOut = {
+  name: string;
+  days: number;
+  change_pct?: number | null;
+  points: IndexPoint[];
+};
+
+export type PopulationEntry = {
+  grade_company: string;
+  grade: string;
+  pop_count: number;
+  as_of: string;
+};
+
+export type PopulationOut = {
+  total: number;
+  entries: PopulationEntry[];
+};
+
+export type SavedSearchParams = {
+  game?: string | null;
+  q?: string | null;
+  sort?: string | null;
+  days?: number | null;
+  grade?: string | null;
+};
+
+export type SavedSearchOut = {
+  id: string;
+  name: string;
+  params: SavedSearchParams;
+  created_at: string;
+};
+
+export type MarketMoversSort =
+  | "change"
+  | "change_asc"
+  | "price"
+  | "volume"
+  | "recent"
+  | "pop"
+  | "market_cap";
+
+export type SaleBrowseOut = {
+  card: CardOut;
+  source: string;
+  price: number;
+  currency: string;
+  price_usd?: number | null;
+  grade?: string | null;
+  listing_url?: string | null;
+  sold_at: string;
+  market_region: string;
+};
+
+export type ShopListingOut = {
+  card: CardOut;
+  source: string;
+  price: number;
+  currency: string;
+  price_usd?: number | null;
+  grade?: string | null;
+  listing_url?: string | null;
+  listed_at: string;
+};
+
+export type ShopSort = "recent" | "price_asc" | "price_desc";
+
+export type IndexSummaryOut = {
+  key: string;
+  name: string;
+  change_pct?: number | null;
+  latest_value?: number | null;
+  constituents: number;
+};
+
+export type WatchlistItemOut = {
+  id: string;
+  card: CardOut;
+  median_usd_30d?: number | null;
+  created_at: string;
+};
+
+export type FxOut = {
+  base: string;
+  as_of?: string | null;
+  /** currency -> value of 1 unit in USD (e.g. GBP: 1.27) */
+  rates: Record<string, number>;
+};
+
+export async function getMarketMovers(opts?: {
+  days?: number;
+  game?: string;
+  q?: string;
+  /** "raw", "graded", or a company prefix: PSA, BGS, CGC, SGC, ACE */
+  grade?: string;
+  sort?: MarketMoversSort;
+  limit?: number;
+  offset?: number;
+}): Promise<MarketMoverOut[]> {
+  const params = new URLSearchParams();
+  if (opts?.days) params.set("days", String(opts.days));
+  if (opts?.game) params.set("game", opts.game);
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.grade) params.set("grade", opts.grade);
+  if (opts?.sort) params.set("sort", opts.sort);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  return apiFetch<MarketMoverOut[]>(`/v1/market/movers${qs ? `?${qs}` : ""}`);
+}
+
+export async function getShopListings(opts?: {
+  game?: string;
+  q?: string;
+  source?: string;
+  grade?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  listedAfter?: string;
+  listedBefore?: string;
+  sort?: ShopSort;
+  limit?: number;
+  offset?: number;
+}): Promise<ShopListingOut[]> {
+  const params = new URLSearchParams();
+  if (opts?.game) params.set("game", opts.game);
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.source) params.set("source", opts.source);
+  if (opts?.grade) params.set("grade", opts.grade);
+  if (opts?.minPrice != null) params.set("min_price", String(opts.minPrice));
+  if (opts?.maxPrice != null) params.set("max_price", String(opts.maxPrice));
+  if (opts?.listedAfter) params.set("listed_after", opts.listedAfter);
+  if (opts?.listedBefore) params.set("listed_before", opts.listedBefore);
+  if (opts?.sort) params.set("sort", opts.sort);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  return apiFetch<ShopListingOut[]>(`/v1/market/listings${qs ? `?${qs}` : ""}`);
+}
+
+export async function getSalesBrowse(opts?: {
+  game?: string;
+  q?: string;
+  source?: string;
+  grade?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  soldAfter?: string;
+  soldBefore?: string;
+  sort?: ShopSort;
+  limit?: number;
+  offset?: number;
+}): Promise<SaleBrowseOut[]> {
+  const params = new URLSearchParams();
+  if (opts?.game) params.set("game", opts.game);
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.source) params.set("source", opts.source);
+  if (opts?.grade) params.set("grade", opts.grade);
+  if (opts?.minPrice != null) params.set("min_price", String(opts.minPrice));
+  if (opts?.maxPrice != null) params.set("max_price", String(opts.maxPrice));
+  if (opts?.soldAfter) params.set("sold_after", opts.soldAfter);
+  if (opts?.soldBefore) params.set("sold_before", opts.soldBefore);
+  if (opts?.sort) params.set("sort", opts.sort);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  return apiFetch<SaleBrowseOut[]>(`/v1/market/sales${qs ? `?${qs}` : ""}`);
+}
+
+export async function getFxRates(): Promise<FxOut> {
+  return apiFetch<FxOut>("/v1/market/fx");
+}
+
+export async function getIndexes(days = 7): Promise<IndexSummaryOut[]> {
+  return apiFetch<IndexSummaryOut[]>(`/v1/market/indexes?days=${days}`);
+}
+
+export async function getWatchlist(): Promise<WatchlistItemOut[]> {
+  return apiFetch<WatchlistItemOut[]>("/v1/watchlist");
+}
+
+export async function addToWatchlist(cardId: string): Promise<WatchlistItemOut> {
+  return apiFetch<WatchlistItemOut>("/v1/watchlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ card_id: cardId }),
+  });
+}
+
+export async function removeFromWatchlist(itemId: string): Promise<void> {
+  await apiFetch<void>(`/v1/watchlist/${itemId}`, { method: "DELETE" });
+}
+
+export async function getMarketIndex(opts?: {
+  days?: number;
+  game?: string;
+}): Promise<MarketIndexOut> {
+  const params = new URLSearchParams();
+  if (opts?.days) params.set("days", String(opts.days));
+  if (opts?.game) params.set("game", opts.game);
+  const qs = params.toString();
+  return apiFetch<MarketIndexOut>(`/v1/market/index${qs ? `?${qs}` : ""}`);
+}
+
+export async function getPopulation(cardId: string): Promise<PopulationOut> {
+  return apiFetch<PopulationOut>(`/v1/cards/${cardId}/population`);
+}
+
+export async function getSavedSearches(): Promise<SavedSearchOut[]> {
+  return apiFetch<SavedSearchOut[]>("/v1/searches");
+}
+
+export async function createSavedSearch(body: {
+  name: string;
+  params: SavedSearchParams;
+}): Promise<SavedSearchOut> {
+  return apiFetch<SavedSearchOut>("/v1/searches", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteSavedSearch(searchId: string): Promise<void> {
+  await apiFetch<void>(`/v1/searches/${searchId}`, { method: "DELETE" });
+}
+
 export type DigestPreview = {
   subject: string;
   body: string;

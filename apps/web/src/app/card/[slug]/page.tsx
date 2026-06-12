@@ -3,7 +3,14 @@ import { CompsTable } from "@/components/comps-table";
 import { ListingsTable } from "@/components/listings-table";
 import { PriceChart } from "@/components/price-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
-import type { CardOut, CompOut, CompSummary, GradeVerdict, SourcePrices } from "@tcgscan/sdk-ts";
+import type {
+  CardOut,
+  CompOut,
+  CompSummary,
+  GradeVerdict,
+  PopulationOut,
+  SourcePrices,
+} from "@tcgscan/sdk-ts";
 import {
   getCardBySlug,
   getChart,
@@ -11,11 +18,13 @@ import {
   getComps,
   getGradeRoi,
   getListings,
+  getPopulation,
   getSourcePrices,
 } from "@tcgscan/sdk-ts";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Money, Num } from "@/lib/currency";
 
 export const revalidate = 900;
 
@@ -28,7 +37,7 @@ function cardImage(card: CardOut): string | null {
   return typeof front === "string" ? front : null;
 }
 
-function PriceTile({ label, value }: { label: string; value: string }) {
+function PriceTile({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-3">
       <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
@@ -40,11 +49,6 @@ function PriceTile({ label, value }: { label: string; value: string }) {
 function popReportUrl(card: CardOut): string {
   const q = encodeURIComponent(`${card.name} ${card.set_name ?? card.set_code ?? ""}`.trim());
   return `https://www.psacard.com/pop/search?q=${q}`;
-}
-
-function fmtUsd(n: number | null | undefined) {
-  if (n == null) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
 function VerdictBadge({ verdict }: { verdict: GradeVerdict }) {
@@ -71,6 +75,7 @@ export default async function CardDetailPage({ params }: Props) {
   let sources: SourcePrices;
   let roi: GradeVerdict | null = null;
   let listings: Awaited<ReturnType<typeof getListings>> = [];
+  let population: PopulationOut | null = null;
 
   try {
     card = await getCardBySlug(slug);
@@ -85,6 +90,11 @@ export default async function CardDetailPage({ params }: Props) {
       roi = await getGradeRoi(card.id, 9);
     } catch {
       roi = null;
+    }
+    try {
+      population = await getPopulation(card.id);
+    } catch {
+      population = null;
     }
   } catch {
     notFound();
@@ -115,19 +125,40 @@ export default async function CardDetailPage({ params }: Props) {
           </p>
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <PriceTile label="30d median" value={fmtUsd(summary.median_usd)} />
-            <PriceTile label="30d mean" value={fmtUsd(summary.mean_usd)} />
-            <PriceTile label="30d low" value={fmtUsd(summary.min_usd)} />
-            <PriceTile label="30d high" value={fmtUsd(summary.max_usd)} />
+            <PriceTile label="30d median" value={<Money usd={summary.median_usd} />} />
+            <PriceTile label="30d mean" value={<Money usd={summary.mean_usd} />} />
+            <PriceTile label="30d low" value={<Money usd={summary.min_usd} />} />
+            <PriceTile label="30d high" value={<Money usd={summary.max_usd} />} />
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
-            <PriceTile label="eBay" value={fmtUsd(sources.ebay_median_usd)} />
-            <PriceTile label="TCGPlayer" value={fmtUsd(sources.tcgplayer_median_usd)} />
-            <PriceTile label="Cardmarket" value={fmtUsd(sources.cardmarket_median_usd)} />
+            <PriceTile label="eBay" value={<Money usd={sources.ebay_median_usd} />} />
+            <PriceTile label="TCGPlayer" value={<Money usd={sources.tcgplayer_median_usd} />} />
+            <PriceTile label="Cardmarket" value={<Money usd={sources.cardmarket_median_usd} />} />
           </div>
 
           <p className="mt-4 text-sm text-zinc-500">{summary.count} sold comps in the last 30 days</p>
+
+          {population && population.total > 0 ? (
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                Graded population · <Num n={population.total} /> total
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {population.entries.map((e) => (
+                  <span
+                    key={`${e.grade_company}-${e.grade}`}
+                    className="rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700"
+                  >
+                    {e.grade_company} {e.grade}:{" "}
+                    <span className="font-semibold">
+                      <Num n={e.pop_count} />
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <p className="mt-2 text-sm">
             <a

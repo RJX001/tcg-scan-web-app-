@@ -124,6 +124,22 @@ class CardPriceDaily(Base):
     max_usd: Mapped[Decimal] = mapped_column(DECIMAL(12, 2), nullable=False)
 
 
+class CardPopulation(Base):
+    """Grading-company population report snapshot per (card, company, grade)."""
+
+    __tablename__ = "card_population"
+
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("card_identity.id"), primary_key=True
+    )
+    grade_company: Mapped[str] = mapped_column(String(16), primary_key=True)  # PSA | BGS | CGC
+    grade: Mapped[str] = mapped_column(String(16), primary_key=True)  # '10', '9.5', ...
+    pop_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    as_of: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class FxRate(Base):
     __tablename__ = "fx_rate"
 
@@ -151,7 +167,9 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    portfolio_items: Mapped[list["PortfolioItem"]] = relationship(back_populates="user", lazy="raise")
+    portfolio_items: Mapped[list["PortfolioItem"]] = relationship(
+        back_populates="user", lazy="raise"
+    )
     alerts: Mapped[list["PriceAlert"]] = relationship(back_populates="user", lazy="raise")
 
 
@@ -176,6 +194,48 @@ class PortfolioItem(Base):
     card: Mapped[CardIdentity] = relationship(lazy="raise")
 
     __table_args__ = (UniqueConstraint("user_id", "card_id", name="uq_portfolio_user_card"),)
+
+
+class WatchlistItem(Base):
+    """Card a user watches without owning — Pro feature (Card Ladder parity)."""
+
+    __tablename__ = "watchlist_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("card_identity.id"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(lazy="raise")
+    card: Mapped[CardIdentity] = relationship(lazy="raise")
+
+    __table_args__ = (UniqueConstraint("user_id", "card_id", name="uq_watchlist_user_card"),)
+
+
+class SavedSearch(Base):
+    """Saved ladder search — filter/sort params snapshot per user."""
+
+    __tablename__ = "saved_searches"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    params: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(lazy="raise")
+
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_saved_search_user_name"),)
 
 
 class AlertDirection(str, enum.Enum):

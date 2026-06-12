@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@tcgscan/ui";
-import { addToPortfolio, createAlert } from "@tcgscan/sdk-ts";
+import { addToPortfolio, addToWatchlist, createAlert } from "@tcgscan/sdk-ts";
 import { useState } from "react";
 
 type Props = {
@@ -27,6 +27,24 @@ export function CardActions({ cardId, cardName, medianUsd }: Props) {
       setStatus(`Added ${cardName} to portfolio`);
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Failed to add");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleWatch() {
+    setLoading(true);
+    setStatus(null);
+    try {
+      await addToWatchlist(cardId);
+      setStatus(`Watching ${cardName} — see /watchlist`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to watch";
+      setStatus(
+        msg.includes("403") || msg.includes("Pro")
+          ? "Watchlist requires Pro — see /account"
+          : msg,
+      );
     } finally {
       setLoading(false);
     }
@@ -62,6 +80,9 @@ export function CardActions({ cardId, cardName, medianUsd }: Props) {
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void handlePortfolio()} disabled={loading} variant="default">
           Add to portfolio
+        </Button>
+        <Button onClick={() => void handleWatch()} disabled={loading} variant="outline">
+          Watch
         </Button>
         <Button
           onClick={() => setShowAlertForm((v) => !v)}

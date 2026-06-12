@@ -4,8 +4,10 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import { exportPortfolioCsv, getPortfolio, getPortfolioSummary, removeFromPortfolio } from "@tcgscan/sdk-ts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useCurrency } from "@/lib/currency";
 
 export function PortfolioClient() {
+  const { fmt: fmtMoney } = useCurrency();
   const [items, setItems] = useState<Awaited<ReturnType<typeof getPortfolio>>>([]);
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof getPortfolioSummary>> | null>(
     null,
@@ -65,11 +67,7 @@ export function PortfolioClient() {
             </div>
             <div>
               <p className="text-zinc-500">Est. value (30d median)</p>
-              <p className="text-lg font-semibold">
-                {summary.estimated_value_usd != null
-                  ? `$${summary.estimated_value_usd.toFixed(2)}`
-                  : "—"}
-              </p>
+              <p className="text-lg font-semibold">{fmtMoney(summary.estimated_value_usd)}</p>
             </div>
           </CardContent>
         </Card>

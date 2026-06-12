@@ -5,7 +5,14 @@ import uuid
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tcgscan_api.db.models import PortfolioItem, PriceAlert, User, UserTier
+from tcgscan_api.db.models import (
+    PortfolioItem,
+    PriceAlert,
+    SavedSearch,
+    User,
+    UserTier,
+    WatchlistItem,
+)
 
 
 class UsersRepo:
@@ -42,13 +49,13 @@ class UsersRepo:
         await self._session.commit()
 
     async def set_tier(self, user_id: uuid.UUID, tier: UserTier) -> None:
-        await self._session.execute(
-            update(User).where(User.id == user_id).values(tier=tier)
-        )
+        await self._session.execute(update(User).where(User.id == user_id).values(tier=tier))
         await self._session.commit()
 
     async def count_portfolio_items(self, user_id: uuid.UUID) -> int:
-        stmt = select(func.count()).select_from(PortfolioItem).where(PortfolioItem.user_id == user_id)
+        stmt = (
+            select(func.count()).select_from(PortfolioItem).where(PortfolioItem.user_id == user_id)
+        )
         return int((await self._session.execute(stmt)).scalar_one())
 
 
@@ -152,3 +159,77 @@ class AlertsRepo:
     async def list_active(self) -> list[PriceAlert]:
         stmt = select(PriceAlert).where(PriceAlert.active.is_(True))
         return list((await self._session.execute(stmt)).scalars().all())
+
+
+class WatchlistRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_for_user(self, user_id: uuid.UUID) -> list[WatchlistItem]:
+        stmt = (
+            select(WatchlistItem)
+            .where(WatchlistItem.user_id == user_id)
+            .order_by(WatchlistItem.created_at.desc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def get_for_card(self, user_id: uuid.UUID, card_id: uuid.UUID) -> WatchlistItem | None:
+        stmt = select(WatchlistItem).where(
+            WatchlistItem.user_id == user_id, WatchlistItem.card_id == card_id
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def add(self, *, user_id: uuid.UUID, card_id: uuid.UUID) -> WatchlistItem:
+        existing = await self.get_for_card(user_id, card_id)
+        if existing:
+            return existing
+        item = WatchlistItem(user_id=user_id, card_id=card_id)
+        self._session.add(item)
+        await self._session.commit()
+        await self._session.refresh(item)
+        return item
+
+    async def remove(self, user_id: uuid.UUID, item_id: uuid.UUID) -> bool:
+        item = await self._session.get(WatchlistItem, item_id)
+        if item is None or item.user_id != user_id:
+            return False
+        await self._session.delete(item)
+        await self._session.commit()
+        return True
+
+
+class SavedSearchRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_for_user(self, user_id: uuid.UUID) -> list[SavedSearch]:
+        stmt = (
+            select(SavedSearch)
+            .where(SavedSearch.user_id == user_id)
+            .order_by(SavedSearch.created_at.desc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def upsert(
+        self, *, user_id: uuid.UUID, name: str, params: dict[str, object]
+    ) -> SavedSearch:
+        stmt = select(SavedSearch).where(SavedSearch.user_id == user_id, SavedSearch.name == name)
+        existing = (await self._session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            existing.params = params
+            await self._session.commit()
+            await self._session.refresh(existing)
+            return existing
+        search = SavedSearch(user_id=user_id, name=name, params=params)
+        self._session.add(search)
+        await self._session.commit()
+        await self._session.refresh(search)
+        return search
+
+    async def delete(self, user_id: uuid.UUID, search_id: uuid.UUID) -> bool:
+        search = await self._session.get(SavedSearch, search_id)
+        if search is None or search.user_id != user_id:
+            return False
+        await self._session.delete(search)
+        await self._session.commit()
+        return True

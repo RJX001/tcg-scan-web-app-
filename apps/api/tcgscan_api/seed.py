@@ -10,6 +10,8 @@ from decimal import Decimal
 from tcgscan_api.db.models import Game, SaleKind, UserTier
 from tcgscan_api.db.session import get_sessionmaker
 from tcgscan_api.repositories.cards import CardsRepo
+from tcgscan_api.repositories.fx import FxRepo
+from tcgscan_api.repositories.market import PopulationRepo
 from tcgscan_api.repositories.sales import SalesRepo
 from tcgscan_api.repositories.users import UsersRepo
 from tcgscan_api.services.slug import card_slug
@@ -22,6 +24,18 @@ PIKACHU_ID = uuid.UUID("22222222-2222-4222-8222-222222222222")
 MEWTWO_ID = uuid.UUID("33333333-3333-4333-8333-333333333333")
 ALAKAZAM_ID = uuid.UUID("66666666-6666-4666-8666-666666666666")
 GYARADOS_ID = uuid.UUID("77777777-7777-4777-8777-777777777777")
+
+# Previous-month price multiplier per card — drives the 1M % change on /ladder.
+# < 1.0 means the card was cheaper last month (it gained), > 1.0 means it dropped.
+PREV_MONTH_MULTIPLIER: dict[uuid.UUID, Decimal] = {
+    CHARIZARD_ID: Decimal("0.78"),  # big gainer
+    BLASTOISE_ID: Decimal("0.92"),
+    VENUSAUR_ID: Decimal("1.05"),
+    PIKACHU_ID: Decimal("0.85"),
+    MEWTWO_ID: Decimal("1.18"),  # big loser
+    ALAKAZAM_ID: Decimal("0.97"),
+    GYARADOS_ID: Decimal("1.02"),
+}
 
 # (card_id, ebay_base_usd, tcgplayer_usd, cardmarket_usd)
 PRICES: dict[uuid.UUID, tuple[Decimal, Decimal, Decimal]] = {
@@ -139,6 +153,34 @@ DEMO_SLUGS = [
 SOLD_GRADES = ("raw", "PSA 9", "BGS 9.5", "CGC 9", "ACE 10")
 LISTING_GRADES = ("raw", "PSA 9", "BGS 9.5", "CGC 9", "ACE 10")
 
+# PSA population per card: (PSA 10, PSA 9, PSA 8) — dev approximations
+POPULATIONS: dict[uuid.UUID, tuple[int, int, int]] = {
+    CHARIZARD_ID: (4274, 14688, 11237),
+    BLASTOISE_ID: (2511, 8954, 6120),
+    VENUSAUR_ID: (2103, 7421, 5318),
+    PIKACHU_ID: (1530, 3905, 2210),
+    MEWTWO_ID: (1893, 6534, 4002),
+    ALAKAZAM_ID: (1278, 5210, 3540),
+    GYARADOS_ID: (1654, 5879, 3877),
+}
+
+
+def _sample_population(card_id: uuid.UUID) -> list[dict[str, object]]:
+    pops = POPULATIONS.get(card_id)
+    if pops is None:
+        return []
+    now = datetime.now(timezone.utc)
+    return [
+        {
+            "card_id": card_id,
+            "grade_company": "PSA",
+            "grade": grade,
+            "pop_count": count,
+            "as_of": now,
+        }
+        for grade, count in zip(("10", "9", "8"), pops)
+    ]
+
 
 def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, object]]:
     now = datetime.now(timezone.utc)
@@ -221,6 +263,27 @@ def _sample_sales(card_id: uuid.UUID, base_price: Decimal) -> list[dict[str, obj
                 "raw_payload": {"seed": True, "marketplace_id": "EBAY_GB"},
             }
         )
+
+    # Previous-month comps (days 32-53) so /ladder has a baseline for 1M % change
+    prev_mult = PREV_MONTH_MULTIPLIER.get(card_id, Decimal("1.00"))
+    for i in range(6):
+        price = (ebay_base * prev_mult + Decimal(str(i * 2))).quantize(Decimal("0.01"))
+        grade = SOLD_GRADES[i % len(SOLD_GRADES)]
+        rows.append(
+            {
+                "card_id": card_id,
+                "source": "ebay",
+                "kind": SaleKind.sold,
+                "sold_at": now - timedelta(days=32 + i * 4),
+                "price": price,
+                "currency": "USD",
+                "price_usd": price,
+                "grade": grade,
+                "condition": "Near Mint",
+                "listing_url": f"https://ebay.com/itm/seed-{card_id}-prev-{i}",
+                "raw_payload": {"seed": True},
+            }
+        )
     return rows
 
 
@@ -274,12 +337,34 @@ async def seed_async() -> None:
         await SalesRepo(session).bulk_insert(sales)
         await SalesRepo(session).bulk_insert(listings)
 
+        pops: list[dict[str, object]] = []
+        for card in CARDS:
+            cid = card["id"]
+            assert isinstance(cid, uuid.UUID)
+            pops.extend(_sample_population(cid))
+        await PopulationRepo(session).upsert_many(pops)
+
         now = datetime.now(timezone.utc)
         for cid in card_ids:
             assert isinstance(cid, uuid.UUID)
-            for d in range(30):
+            for d in range(60):
                 day = now - timedelta(days=d)
                 await SalesRepo(session).rollup_day(cid, day)
+
+        # Demo FX rates (value of 1 unit in USD) — production rates come from
+        # the worker's ECB/frankfurter source on a daily schedule.
+        await FxRepo(session).upsert_many(
+            day=now.replace(hour=0, minute=0, second=0, microsecond=0),
+            rates_to_usd={
+                "USD": 1.0,
+                "GBP": 1.27,
+                "EUR": 1.08,
+                "JPY": 0.0066,
+                "CAD": 0.73,
+                "AUD": 0.66,
+                "CHF": 1.11,
+            },
+        )
 
         dev_user = await UsersRepo(session).get_or_create(
             clerk_id="dev-user", email="dev@localhost"
