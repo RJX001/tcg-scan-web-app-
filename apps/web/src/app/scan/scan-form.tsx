@@ -8,13 +8,7 @@ import { scanCard } from "@tcgscan/sdk-ts";
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 
-const GAMES = [
-  { value: "pokemon", label: "Pokemon" },
-  { value: "mtg", label: "Magic" },
-  { value: "yugioh", label: "Yu-Gi-Oh!" },
-  { value: "lorcana", label: "Lorcana" },
-  { value: "one_piece", label: "One Piece" },
-];
+import { DEMO_CARDS, SCAN_GAMES } from "@/lib/games";
 
 function matchSlug(match: { game?: string | null; set_code?: string | null; number?: string | null }) {
   if (!match.game || !match.set_code) return null;
@@ -131,7 +125,7 @@ export function ScanForm() {
           onChange={(e) => setGame(e.target.value)}
           className="rounded-lg border border-zinc-300 px-2 py-1 text-sm"
         >
-          {GAMES.map((g) => (
+          {SCAN_GAMES.map((g) => (
             <option key={g.value} value={g.value}>
               {g.label}
             </option>
@@ -302,9 +296,9 @@ export function ScanForm() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-zinc-600">
-              No matches — run{" "}
-              <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code> and{" "}
-              <code className="rounded bg-zinc-100 px-1">pnpm embed:catalog</code>.
+              No matches — pick the correct game above, then run{" "}
+              <code className="rounded bg-zinc-100 px-1">pnpm db:demo</code> to load all
+              five TCG catalogs into Qdrant.
             </p>
           </CardContent>
         </Card>
@@ -314,19 +308,20 @@ export function ScanForm() {
         <CardHeader>
           <CardTitle>Demo cards</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {[
-            ["pokemon-base1-4-102", "Charizard 4/102"],
-            ["pokemon-base1-2-102", "Blastoise 2/102"],
-            ["pokemon-base1-15-102", "Venusaur 15/102"],
-            ["pokemon-base1-58-102", "Pikachu 58/102"],
-            ["pokemon-base1-10-102", "Mewtwo 10/102"],
-            ["pokemon-base1-1-102", "Alakazam 1/102"],
-            ["pokemon-base1-6-102", "Gyarados 6/102"],
-          ].map(([slug, label]) => (
-            <Button key={slug} asChild variant="outline" size="sm">
-              <Link href={`/card/${slug}`}>{label}</Link>
-            </Button>
+        <CardContent className="space-y-4">
+          {(["pokemon", "mtg", "yugioh", "lorcana", "one_piece"] as const).map((game) => (
+            <div key={game}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                {SCAN_GAMES.find((g) => g.value === game)?.label ?? game}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {DEMO_CARDS.filter((c) => c.game === game).map(({ slug, label }) => (
+                  <Button key={slug} asChild variant="outline" size="sm">
+                    <Link href={`/card/${slug}`}>{label}</Link>
+                  </Button>
+                ))}
+              </div>
+            </div>
           ))}
         </CardContent>
       </Card>

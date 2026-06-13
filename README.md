@@ -35,7 +35,7 @@ Open http://localhost:3000 — demo card: http://localhost:3000/card/pokemon-bas
 
 | Command | Purpose |
 |---------|---------|
-| `pnpm db:demo` | Migrate + seed + embed Pokemon into Qdrant |
+| `pnpm db:demo` | Migrate + seed + embed all five TCG catalogs (Pokemon, MTG, Yu-Gi-Oh!, Lorcana, One Piece) into Qdrant |
 | `pnpm ingest:catalog -- --game pokemon` | Ingest catalog from official APIs |
 | `pnpm embed:catalog -- --game pokemon` | Embed catalog images to Qdrant |
 | `pnpm ingest:pricing -- --game pokemon --card-limit 100` | Pull marketplace comps |

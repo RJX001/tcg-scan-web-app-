@@ -64,4 +64,4 @@ APIFY_TOKEN=
 | Daily digest | Every 24 h | `workflows/digest_workflow.py` → DigestAgent |
 | Scan + embed | On demand | `apps/api/services/scan.py`, `worker/embedding.py` |
 
-**Local demo:** `pnpm db:demo` (migrate + seed + embed Pokemon catalog into Qdrant).
+**Local demo:** `pnpm db:demo` (migrate + seed + embed Pokemon, MTG, Yu-Gi-Oh!, Lorcana, and One Piece into Qdrant).
