@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 
-import pytest
 from PIL import Image
 
 from tcgscan_ml.grade.heuristic import grade_image_bytes

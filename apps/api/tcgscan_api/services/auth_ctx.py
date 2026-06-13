@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +16,9 @@ async def resolve_db_user(session: AsyncSession, request: Request) -> AuthUser:
     principal = getattr(request.state, "user", None)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required")
-    user = await UsersRepo(session).get_or_create(clerk_id=principal.clerk_id, email=principal.email)
+    user = await UsersRepo(session).get_or_create(
+        clerk_id=principal.clerk_id, email=principal.email
+    )
     return AuthUser(
         id=user.id,
         clerk_id=user.clerk_id,
@@ -35,7 +36,9 @@ async def optional_db_user(session: AsyncSession, request: Request) -> AuthUser 
     principal = getattr(request.state, "user", None)
     if principal is None:
         return None
-    user = await UsersRepo(session).get_or_create(clerk_id=principal.clerk_id, email=principal.email)
+    user = await UsersRepo(session).get_or_create(
+        clerk_id=principal.clerk_id, email=principal.email
+    )
     return AuthUser(
         id=user.id,
         clerk_id=user.clerk_id,

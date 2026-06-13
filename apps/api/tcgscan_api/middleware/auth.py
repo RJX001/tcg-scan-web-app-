@@ -28,23 +28,18 @@ async def _verify_clerk_bearer(token: str) -> tuple[str, str | None] | None:
     try:
         import httpx
         from clerk_backend_api import Clerk
-        from clerk_backend_api.security import authenticate_request
         from clerk_backend_api.security.types import AuthenticateRequestOptions
     except ImportError:
         return None
 
-    parties = [
-        p.strip()
-        for p in (settings.clerk_authorized_parties or "").split(",")
-        if p.strip()
-    ]
+    parties = [p.strip() for p in (settings.clerk_authorized_parties or "").split(",") if p.strip()]
     req = httpx.Request(
         method="GET",
         url="https://tcgscan.local/auth",
         headers=[("authorization", f"Bearer {token}")],
     )
     sdk = Clerk(bearer_auth=settings.clerk_secret_key)
-    state = authenticate_request(
+    state = sdk.authenticate_request(
         req,
         AuthenticateRequestOptions(authorized_parties=parties or None),
     )

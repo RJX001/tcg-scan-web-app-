@@ -163,7 +163,9 @@ class User(Base):
         Enum(UserTier, name="user_tier", native_enum=False), nullable=False, default=UserTier.free
     )
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
-    comps_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30, server_default="30")
+    comps_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=30, server_default="30"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

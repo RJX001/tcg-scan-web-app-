@@ -33,7 +33,11 @@ class CardmarketSource(PriceSource):
             self._dataset_path(),
             params={"limit": limit, "clean": "true", "search": query},
         )
-        items = payload if isinstance(payload, list) else payload.get("data") or payload.get("items") or []
+        items = (
+            payload
+            if isinstance(payload, list)
+            else payload.get("data") or payload.get("items") or []
+        )
         for it in items:
             if not isinstance(it, dict):
                 continue

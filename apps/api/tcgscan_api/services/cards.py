@@ -117,9 +117,7 @@ async def get_comps(
     source: str | None = None,
     grade: str | None = None,
 ) -> list[CompOut]:
-    rows = await SalesRepo(session).comps_for_card(
-        card_id, days=days, source=source, grade=grade
-    )
+    rows = await SalesRepo(session).comps_for_card(card_id, days=days, source=source, grade=grade)
     return [
         CompOut(
             source=r.source,
@@ -202,7 +200,9 @@ async def get_chart(
     return points
 
 
-async def get_source_prices(session: AsyncSession, card_id: uuid.UUID, days: int = 30) -> SourcePrices:
+async def get_source_prices(
+    session: AsyncSession, card_id: uuid.UUID, days: int = 30
+) -> SourcePrices:
     from tcgscan_api.services.marketplace_search import marketplace_search_urls
 
     card = await CardsRepo(session).get(card_id)

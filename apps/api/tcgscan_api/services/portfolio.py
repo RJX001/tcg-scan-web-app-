@@ -9,7 +9,6 @@ from tcgscan_api.errors import NotFoundError
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.users import PortfolioRepo, UsersRepo
-from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.cards import CardOut, _to_out, get_comp_summary
 from tcgscan_api.services.tier import check_portfolio_limit, require_pro
 

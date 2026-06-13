@@ -1,5 +1,3 @@
-import pytest
-
 from tcgscan_worker.sources.grade_parse import parse_grade_from_text
 
 

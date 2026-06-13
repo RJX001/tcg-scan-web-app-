@@ -32,7 +32,9 @@ def _median(prices: list[float]) -> float | None:
     return float(statistics.median(prices))
 
 
-def _bucket_price(rows: Sequence[object], *, raw: bool, grade_prefix: str | None = None) -> float | None:
+def _bucket_price(
+    rows: Sequence[object], *, raw: bool, grade_prefix: str | None = None
+) -> float | None:
     prices: list[float] = []
     for r in rows:
         grade = getattr(r, "grade", None) or "raw"
@@ -53,7 +55,8 @@ async def _with_agent(verdict: GradeVerdict, *, card_id: uuid.UUID, psa_high: in
     if verdict.action in {"GRADE", "SELL"}:
         return verdict.model_copy(
             update={
-                "expected_profit_usd": agent.get("expected_profit_usd") or verdict.expected_profit_usd,
+                "expected_profit_usd": agent.get("expected_profit_usd")
+                or verdict.expected_profit_usd,
             }
         )
     return verdict.model_copy(

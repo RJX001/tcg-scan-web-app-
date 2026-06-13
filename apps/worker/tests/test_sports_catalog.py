@@ -21,9 +21,7 @@ async def test_sports_iter_cards_maps_game(monkeypatch: pytest.MonkeyPatch) -> N
         ]
     }
     with respx.MockRouter(assert_all_called=False) as route:
-        route.get("https://api.tcgapi.dev/v1/sports/cards").mock(
-            httpx.Response(200, json=fixture)
-        )
+        route.get("https://api.tcgapi.dev/v1/sports/cards").mock(httpx.Response(200, json=fixture))
         ingester = SportsCatalog()
         cards = []
         async for c in ingester.iter_cards(limit=1):

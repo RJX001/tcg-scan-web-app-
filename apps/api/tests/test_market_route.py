@@ -374,9 +374,7 @@ async def test_browse_sales(sqlite_session: AsyncSession) -> None:
     assert len(all_sales) >= 2
 
     psa_only = await repo.browse_sales(grade="PSA")
-    assert all(
-        s.grade is None or s.grade.upper().startswith("PSA") for s in psa_only
-    )
+    assert all(s.grade is None or s.grade.upper().startswith("PSA") for s in psa_only)
 
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session

@@ -73,7 +73,6 @@ async def update_account_preferences(
     session: AsyncSession, request: Request, body: AccountPreferencesIn
 ) -> AccountOut:
     auth = await resolve_db_user(session, request)
-    from tcgscan_api.services.auth_ctx import is_pro
     from tcgscan_api.services.tier import require_pro
 
     require_pro(auth, feature="Custom comp window")
@@ -132,7 +131,9 @@ def settings_success_url() -> str:
     return get_settings().stripe_success_url.split("?")[0]
 
 
-async def handle_stripe_webhook(session: AsyncSession, payload: bytes, sig_header: str | None) -> None:
+async def handle_stripe_webhook(
+    session: AsyncSession, payload: bytes, sig_header: str | None
+) -> None:
     settings = get_settings()
     if not settings.stripe_webhook_secret:
         raise AppError("Webhook secret not configured", status_code=503)
@@ -146,7 +147,11 @@ async def handle_stripe_webhook(session: AsyncSession, payload: bytes, sig_heade
     data = event["data"]["object"]
     log.info("stripe.webhook", type=etype)
 
-    if etype in ("checkout.session.completed", "customer.subscription.created", "customer.subscription.updated"):
+    if etype in (
+        "checkout.session.completed",
+        "customer.subscription.created",
+        "customer.subscription.updated",
+    ):
         user_id = _user_id_from_metadata(data)
         if user_id:
             await UsersRepo(session).set_tier(user_id, UserTier.pro)

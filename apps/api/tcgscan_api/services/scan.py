@@ -130,7 +130,9 @@ def _popularity_boost(payload: dict[str, object]) -> float:
     return 0.95 + max(0.0, min(1.0, pop)) * 0.1
 
 
-def _rerank(points: list[qm.ScoredPoint], ocr_text: str, ocr_fields: dict[str, object]) -> list[ScanMatch]:
+def _rerank(
+    points: list[qm.ScoredPoint], ocr_text: str, ocr_fields: dict[str, object]
+) -> list[ScanMatch]:
     matches: list[ScanMatch] = []
     for p in points:
         payload = p.payload or {}
@@ -140,7 +142,9 @@ def _rerank(points: list[qm.ScoredPoint], ocr_text: str, ocr_fields: dict[str, o
         number = payload.get("number")
         slug = None
         if game and set_code:
-            slug = card_slug(str(game), str(set_code) if set_code else None, str(number) if number else None)
+            slug = card_slug(
+                str(game), str(set_code) if set_code else None, str(number) if number else None
+            )
         ocr_match = _ocr_match_score(
             name=name,
             number=str(number) if number else None,
@@ -240,9 +244,7 @@ async def run_scan(payload: ScanInput) -> ScanResult:
 
         matches = _rerank(points, ocr_text, ocr_fields)
         if not matches and payload.game_hint:
-            matches = await _catalog_fallback_matches(
-                game=payload.game_hint, top_k=payload.top_k
-            )
+            matches = await _catalog_fallback_matches(game=payload.game_hint, top_k=payload.top_k)
             log.info("scan.catalog_fallback", game=payload.game_hint, count=len(matches))
         condition = ConditionEstimate.model_validate(grade_out)
 
@@ -250,9 +252,7 @@ async def run_scan(payload: ScanInput) -> ScanResult:
             try:
                 card_uuid = uuid.UUID(matches[0].card_id)
                 async with get_sessionmaker()() as session:
-                    verdict = await compute_verdict(
-                        session, card_uuid, psa_high=condition.psa_high
-                    )
+                    verdict = await compute_verdict(session, card_uuid, psa_high=condition.psa_high)
                     if verdict is not None:
                         condition = condition.model_copy(update={"verdict": verdict})
             except (ValueError, Exception) as exc:

@@ -37,7 +37,9 @@ def upgrade() -> None:
         sa.Column("clerk_id", sa.String(128), nullable=False),
         sa.Column("email", sa.String(255), nullable=True),
         sa.Column("tier", tier_type, nullable=False, server_default="free"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("clerk_id"),
     )
@@ -51,7 +53,9 @@ def upgrade() -> None:
         sa.Column("quantity", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("cost_basis_usd", sa.Numeric(12, 2), nullable=True),
         sa.Column("notes", sa.String(512), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.ForeignKeyConstraint(["card_id"], ["card_identity.id"]),
         sa.PrimaryKeyConstraint("id"),
@@ -70,7 +74,9 @@ def upgrade() -> None:
         sa.Column("grade_filter", sa.String(16), nullable=True),
         sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("last_triggered_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.ForeignKeyConstraint(["card_id"], ["card_identity.id"]),
         sa.PrimaryKeyConstraint("id"),

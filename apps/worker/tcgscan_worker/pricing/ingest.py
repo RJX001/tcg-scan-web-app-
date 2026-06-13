@@ -109,9 +109,7 @@ async def ingest_batch(
 
     for card in cards:
         try:
-            total += await ingest_for_card(
-                card.id, sources=source_ids, limit=per_source_limit
-            )
+            total += await ingest_for_card(card.id, sources=source_ids, limit=per_source_limit)
         except Exception as exc:
             log.warning("pricing.batch.card_failed", card_id=str(card.id), error=str(exc))
     log.info("pricing.batch.done", cards=len(cards), rows=total, game=game)
