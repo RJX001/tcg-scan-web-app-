@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync
+      - run: uv sync --all-packages
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.0
@@ -30,7 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync
+      - run: uv sync --all-packages
       - run: uv run ruff check apps/api apps/worker apps/ml packages/agents packages/sdk-py
-      - run: uv run mypy apps/api/tcgscan_api apps/worker/tcgscan_worker apps/ml/tcgscan_ml packages/agents/tcgscan_agents
+      - run: uv run --directory apps/api mypy tcgscan_api
+      - run: uv run --directory apps/worker mypy tcgscan_worker
+      - run: uv run --directory apps/ml mypy tcgscan_ml
+      - run: uv run --directory packages/agents mypy tcgscan_agents
       - run: uv run pytest apps/api/tests apps/worker/tests apps/ml/tests packages/agents/tests packages/sdk-py/tests

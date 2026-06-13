@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
@@ -47,8 +47,8 @@ def compose_node(state: DigestState) -> DigestState:
     }
 
 
-def build_digest_graph() -> StateGraph:
-    g: StateGraph = StateGraph(DigestState)
+def build_digest_graph() -> Any:
+    g = StateGraph(DigestState)
     g.add_node("compose", compose_node)
     g.set_entry_point("compose")
     g.add_edge("compose", END)

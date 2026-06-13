@@ -122,9 +122,14 @@ def _popularity_boost(payload: dict[str, object]) -> float:
     raw = payload.get("popularity")
     if raw is None:
         return 1.0
-    try:
+    if isinstance(raw, (int, float)):
         pop = float(raw)
-    except (TypeError, ValueError):
+    elif isinstance(raw, str):
+        try:
+            pop = float(raw)
+        except ValueError:
+            return 1.0
+    else:
         return 1.0
     # Map popularity 0–1 to a small boost band [0.95, 1.05]
     return 0.95 + max(0.0, min(1.0, pop)) * 0.1

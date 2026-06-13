@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import structlog
 from fastapi import Request
@@ -39,7 +40,7 @@ class CheckoutOut(BaseModel):
     url: str
 
 
-def _stripe():
+def _stripe() -> Any:
     settings = get_settings()
     if not settings.stripe_secret_key:
         raise AppError("Stripe is not configured", status_code=503)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.session import get_session
 from tcgscan_api.errors import AppError
+from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.billing import (
     AccountOut,
@@ -20,11 +23,11 @@ from tcgscan_api.services.billing import (
 router = APIRouter(tags=["billing"])
 
 
-def _require_user(request: Request):
+def _require_user(request: Request) -> AuthUser:
     user = getattr(request.state, "user", None)
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required")
-    return user
+    return cast(AuthUser, user)
 
 
 @router.get("/account", response_model=AccountOut)

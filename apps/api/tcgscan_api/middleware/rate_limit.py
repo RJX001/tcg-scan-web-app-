@@ -13,7 +13,7 @@ from tcgscan_api.repositories.users import UsersRepo
 from tcgscan_api.db.models import UserTier
 
 
-async def _redis() -> redis.Redis:  # type: ignore[type-arg]
+async def _redis() -> redis.Redis:
     settings = get_settings()
     return redis.from_url(settings.redis_url, decode_responses=True)
 
