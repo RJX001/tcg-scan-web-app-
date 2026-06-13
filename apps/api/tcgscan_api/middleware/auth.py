@@ -75,6 +75,10 @@ async def resolve_user(request: Request) -> AuthUser | None:
                 )
         return None
 
+    # Never allow dev-header auth in production — blocks X-Dev-User-Id bypass.
+    if settings.environment == "production":
+        return None
+
     if settings.dev_auth_enabled and not settings.clerk_secret_key:
         dev_id = request.headers.get("X-Dev-User-Id", "dev-user")
         return AuthUser(

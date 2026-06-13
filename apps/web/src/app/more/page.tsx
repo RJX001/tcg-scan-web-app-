@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CurrencySelect } from "@/lib/currency";
 
 export const metadata: Metadata = {
-  title: "More — TCG Scan",
+  title: "More — TCG Chart",
 };
 
 type Item = {

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SalesClient } from "./sales-client";
 
 export const metadata: Metadata = {
-  title: "Sales — TCG Scan",
+  title: "Sales — TCG Chart",
   description:
     "Browse recent sold comps across eBay, TCGPlayer, Cardmarket, and more — filter by grade, platform, and date.",
 };

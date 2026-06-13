@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { IndexesClient } from "./indexes-client";
 
 export const metadata: Metadata = {
-  title: "Indexes — TCG Scan",
+  title: "Indexes — TCG Chart",
   description:
     "Composite market indexes for every game we track — equal-weighted, CL50-style, with weekly change.",
 };

@@ -2,17 +2,14 @@
 
 import { useMemo, useState } from "react";
 import type { CompOut } from "@tcgscan/sdk-ts";
-import { GradeFilterBar } from "@/components/grade-filter-bar";
-import { RegionFilterBar } from "@/components/region-filter-bar";
+import { SalesTableFilters } from "@/components/sales-table-filters";
 import { SoldAtCell } from "@/components/sold-at-cell";
-import {
-  matchesGradeCompanyFilter,
-  type GradeCompanyFilter,
-} from "@/lib/grade-filters";
+import { matchesGradeFilter, type GradeCompanyFilter } from "@/lib/grade-filters";
 import {
   matchesMarketRegionFilter,
   type MarketRegionFilter,
 } from "@/lib/market-regions";
+import { formatGradeLabel, formatSourceLabel } from "@/lib/sales-display";
 
 /** Comps carry their source currency (eBay USD, Cardmarket EUR, …) — show it honestly. */
 function fmtNative(n: number, currency: string) {
@@ -30,92 +27,89 @@ type Props = {
 export function CompsTable({ comps }: Props) {
   const sources = useMemo(() => {
     const set = new Set(comps.map((c) => c.source));
-    return ["all", ...Array.from(set).sort()];
+    return Array.from(set);
   }, [comps]);
 
   const [source, setSource] = useState("all");
   const [gradeFilter, setGradeFilter] = useState<GradeCompanyFilter>("all");
+  const [gradeSub, setGradeSub] = useState("");
   const [regionFilter, setRegionFilter] = useState<MarketRegionFilter>("all");
+
+  const availableGrades = useMemo(() => comps.map((c) => c.grade), [comps]);
 
   const filtered = useMemo(
     () =>
       comps.filter(
         (c) =>
           (source === "all" || c.source === source) &&
-          matchesGradeCompanyFilter(c.grade, gradeFilter) &&
+          matchesGradeFilter(c.grade, gradeFilter, gradeSub) &&
           matchesMarketRegionFilter(c, regionFilter),
       ),
-    [comps, source, gradeFilter, regionFilter],
+    [comps, source, gradeFilter, gradeSub, regionFilter],
   );
 
   if (comps.length === 0) {
     return (
-      <p className="text-sm uppercase text-zinc-600">
-        No comps yet. Run <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code>.
+      <p className="text-sm text-zinc-600">
+        No comps yet. Run <code className="rounded bg-zinc-100 px-1 normal-case">pnpm db:seed</code>.
       </p>
     );
   }
 
   return (
     <div className="uppercase">
-      <div className="mb-3 space-y-2">
-        <RegionFilterBar value={regionFilter} onChange={setRegionFilter} uppercase />
-        <GradeFilterBar value={gradeFilter} onChange={setGradeFilter} />
-        <div className="flex flex-wrap gap-2">
-          {sources.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSource(s)}
-              className={`rounded-full px-3 py-1 text-xs ${
-                source === s ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-700"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SalesTableFilters
+        sources={sources}
+        source={source}
+        onSourceChange={setSource}
+        gradeFilter={gradeFilter}
+        gradeSub={gradeSub}
+        onGradeFilterChange={setGradeFilter}
+        onGradeSubChange={setGradeSub}
+        availableGrades={availableGrades}
+        regionFilter={regionFilter}
+        onRegionFilterChange={setRegionFilter}
+      />
       {filtered.length === 0 ? (
-        <p className="text-sm text-zinc-600">No comps match the selected filters.</p>
+        <p className="mt-3 text-sm normal-case text-zinc-600">No comps match the selected filters.</p>
       ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-zinc-500">
-              <th className="py-2 pr-4">Sold</th>
-              <th className="py-2 pr-4">Price</th>
-              <th className="py-2 pr-4">Grade</th>
-              <th className="py-2 pr-4">Source</th>
-              <th className="py-2">Market</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c, i) => (
-              <tr key={`${c.sold_at}-${i}`} className="border-b border-zinc-100">
-                <SoldAtCell iso={c.sold_at} className="py-2 pr-4 whitespace-nowrap" />
-                <td className="py-2 pr-4 font-medium">
-                  {c.listing_url ? (
-                    <a
-                      href={c.listing_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      {fmtNative(c.price, c.currency)}
-                    </a>
-                  ) : (
-                    fmtNative(c.price, c.currency)
-                  )}
-                </td>
-                <td className="py-2 pr-4">{c.grade ?? "raw"}</td>
-                <td className="py-2 pr-4">{c.source}</td>
-                <td className="py-2">{c.market_region}</td>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b text-zinc-500">
+                <th className="py-2 pr-4">SOLD</th>
+                <th className="py-2 pr-4">PRICE</th>
+                <th className="py-2 pr-4">GRADE</th>
+                <th className="py-2 pr-4">SOURCE</th>
+                <th className="py-2">MARKET</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((c, i) => (
+                <tr key={`${c.sold_at}-${i}`} className="border-b border-zinc-100">
+                  <SoldAtCell iso={c.sold_at} className="py-2 pr-4 whitespace-nowrap normal-case" />
+                  <td className="py-2 pr-4 font-medium normal-case">
+                    {c.listing_url ? (
+                      <a
+                        href={c.listing_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {fmtNative(c.price, c.currency)}
+                      </a>
+                    ) : (
+                      fmtNative(c.price, c.currency)
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">{formatGradeLabel(c.grade)}</td>
+                  <td className="py-2 pr-4">{formatSourceLabel(c.source)}</td>
+                  <td className="py-2">{c.market_region.toUpperCase()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

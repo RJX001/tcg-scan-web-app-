@@ -19,12 +19,20 @@ from tcgscan_api.services.auth_ctx import resolve_db_user
 log = structlog.get_logger()
 
 
+ALLOWED_COMPS_DAYS = (7, 30, 90, 180)
+
+
 class AccountOut(BaseModel):
     clerk_id: str
     email: str | None = None
     tier: str
     portfolio_limit: int | None = None
     scans_per_day: int | None = None
+    comps_days: int = 30
+
+
+class AccountPreferencesIn(BaseModel):
+    comps_days: int
 
 
 class CheckoutOut(BaseModel):
@@ -44,17 +52,40 @@ def _stripe():
 
 
 async def get_account(session: AsyncSession, request: Request) -> AccountOut:
-    user = await resolve_db_user(session, request)
+    auth = await resolve_db_user(session, request)
     settings = get_settings()
     from tcgscan_api.services.auth_ctx import is_pro
 
+    user_row = await UsersRepo(session).get_by_id(auth.id)
+    comps_days = user_row.comps_days if user_row is not None else 30
+
     return AccountOut(
-        clerk_id=user.clerk_id,
-        email=user.email,
-        tier=user.tier,
-        portfolio_limit=None if is_pro(user) else settings.free_portfolio_limit,
-        scans_per_day=None if is_pro(user) else settings.free_scans_per_day,
+        clerk_id=auth.clerk_id,
+        email=auth.email,
+        tier=auth.tier,
+        portfolio_limit=None if is_pro(auth) else settings.free_portfolio_limit,
+        scans_per_day=None if is_pro(auth) else settings.free_scans_per_day,
+        comps_days=comps_days,
     )
+
+
+async def update_account_preferences(
+    session: AsyncSession, request: Request, body: AccountPreferencesIn
+) -> AccountOut:
+    auth = await resolve_db_user(session, request)
+    from tcgscan_api.services.auth_ctx import is_pro
+    from tcgscan_api.services.tier import require_pro
+
+    require_pro(auth, feature="Custom comp window")
+    if body.comps_days not in ALLOWED_COMPS_DAYS:
+        raise AppError(
+            f"comps_days must be one of {list(ALLOWED_COMPS_DAYS)}",
+            status_code=400,
+        )
+    updated = await UsersRepo(session).set_comps_days(auth.id, body.comps_days)
+    if updated is None:
+        raise AppError("User not found", status_code=404)
+    return await get_account(session, request)
 
 
 async def create_checkout_session(session: AsyncSession, auth: AuthUser) -> CheckoutOut:

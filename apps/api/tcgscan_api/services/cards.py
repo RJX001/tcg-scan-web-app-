@@ -65,10 +65,20 @@ class ChartPoint(BaseModel):
     sample_count: int
 
 
+class MarketplacePriceOut(BaseModel):
+    source: str
+    label: str
+    avg_usd: float | None = None
+    sample_count: int = 0
+    search_url: str
+
+
 class SourcePrices(BaseModel):
+    days: int = 30
     ebay_median_usd: float | None = None
     tcgplayer_median_usd: float | None = None
     cardmarket_median_usd: float | None = None
+    marketplaces: list[MarketplacePriceOut] = []
 
 
 def _to_out(card: CardIdentity) -> CardOut:
@@ -193,11 +203,40 @@ async def get_chart(
 
 
 async def get_source_prices(session: AsyncSession, card_id: uuid.UUID, days: int = 30) -> SourcePrices:
+    from tcgscan_api.services.marketplace_search import marketplace_search_urls
+
+    card = await CardsRepo(session).get(card_id)
+    if card is None:
+        raise NotFoundError(f"card not found: {card_id}")
+    card_out = _to_out(card)
     summary = await SalesRepo(session).source_summary(card_id, days=days)
+    urls = marketplace_search_urls(card_out)
+
+    tiles: list[MarketplacePriceOut] = []
+    for source, label in (
+        ("ebay", "eBay"),
+        ("tcgplayer", "TCGPlayer"),
+        ("cardmarket", "Cardmarket"),
+    ):
+        stats = summary.get(source)
+        avg_usd = stats[0] if stats else None
+        count = stats[1] if stats else 0
+        tiles.append(
+            MarketplacePriceOut(
+                source=source,
+                label=label,
+                avg_usd=avg_usd,
+                sample_count=count,
+                search_url=urls[source],
+            )
+        )
+
     return SourcePrices(
-        ebay_median_usd=summary.get("ebay"),
-        tcgplayer_median_usd=summary.get("tcgplayer"),
-        cardmarket_median_usd=summary.get("cardmarket"),
+        days=days,
+        ebay_median_usd=summary.get("ebay", (None, 0))[0],
+        tcgplayer_median_usd=summary.get("tcgplayer", (None, 0))[0],
+        cardmarket_median_usd=summary.get("cardmarket", (None, 0))[0],
+        marketplaces=tiles,
     )
 
 

@@ -52,3 +52,27 @@ async def check_scan_rate_limit(request: Request) -> None:
         raise
     except Exception:
         pass
+
+
+async def check_ip_rate_limit(
+    request: Request,
+    *,
+    prefix: str,
+    limit: int,
+    window_s: int = 60,
+) -> None:
+    """Per-IP token bucket for anonymous public endpoints (search, etc.)."""
+    client_ip = request.client.host if request.client else "unknown"
+    key = f"{prefix}:{client_ip}"
+
+    try:
+        r = await _redis()
+        count = await r.incr(key)
+        if count == 1:
+            await r.expire(key, window_s)
+        if count > limit:
+            raise HTTPException(status_code=429, detail="Too many requests. Try again shortly.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass

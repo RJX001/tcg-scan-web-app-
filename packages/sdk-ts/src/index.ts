@@ -89,10 +89,20 @@ export type ChartPoint = {
   sample_count: number;
 };
 
+export type MarketplacePriceOut = {
+  source: string;
+  label: string;
+  avg_usd?: number | null;
+  sample_count: number;
+  search_url: string;
+};
+
 export type SourcePrices = {
+  days?: number;
   ebay_median_usd?: number | null;
   tcgplayer_median_usd?: number | null;
   cardmarket_median_usd?: number | null;
+  marketplaces?: MarketplacePriceOut[];
 };
 
 export type PortfolioItemOut = {
@@ -136,6 +146,7 @@ export type AccountOut = {
   tier: string;
   portfolio_limit?: number | null;
   scans_per_day?: number | null;
+  comps_days?: number;
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -209,8 +220,17 @@ export async function getChart(cardId: string, days = 90): Promise<ChartPoint[]>
   return apiFetch<ChartPoint[]>(`/v1/cards/${cardId}/chart?days=${days}`);
 }
 
-export async function getSourcePrices(cardId: string, days = 30): Promise<SourcePrices> {
-  return apiFetch<SourcePrices>(`/v1/cards/${cardId}/sources?days=${days}`);
+export async function getSourcePrices(cardId: string, days?: number): Promise<SourcePrices> {
+  const qs = days != null ? `?days=${days}` : "";
+  return apiFetch<SourcePrices>(`/v1/cards/${cardId}/sources${qs}`);
+}
+
+export async function updateAccountPreferences(body: { comps_days: number }): Promise<AccountOut> {
+  return apiFetch<AccountOut>("/v1/account/preferences", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function getGradeRoi(cardId: string, psaHigh = 9): Promise<GradeVerdict> {

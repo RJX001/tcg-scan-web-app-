@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { WatchlistClient } from "./watchlist-client";
 
 export const metadata: Metadata = {
-  title: "Watchlist — TCG Scan",
+  title: "Watchlist — TCG Chart",
 };
 
 export default function WatchlistPage() {

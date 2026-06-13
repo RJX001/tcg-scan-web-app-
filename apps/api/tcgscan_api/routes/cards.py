@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.session import get_session
 from tcgscan_api.errors import NotFoundError
+from tcgscan_api.middleware.rate_limit import check_ip_rate_limit
 from tcgscan_api.services.cache import cache_get, cache_set
+from tcgscan_api.repositories.users import UsersRepo
+from tcgscan_api.services.auth_ctx import is_pro, optional_db_user
+from tcgscan_api.services.billing import ALLOWED_COMPS_DAYS
 from tcgscan_api.services.cards import (
     CardOut,
     ChartPoint,
@@ -34,11 +38,13 @@ router = APIRouter(prefix="/cards", tags=["cards"])
 
 @router.get("/search", response_model=list[CardOut])
 async def card_search(
+    request: Request,
     q: str = Query(min_length=1),
     game: str | None = None,
     limit: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
 ) -> list[CardOut]:
+    await check_ip_rate_limit(request, prefix="search_rate", limit=120)
     return await search_cards(session, q=q, game=game, limit=limit)
 
 
@@ -122,11 +128,18 @@ async def card_chart(
 
 @router.get("/{card_id}/sources", response_model=SourcePrices)
 async def card_source_prices(
+    request: Request,
     card_id: uuid.UUID,
-    days: int = Query(default=30, ge=1, le=365),
+    days: int | None = Query(default=None, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ) -> SourcePrices:
-    return await get_source_prices(session, card_id, days=days)
+    window = days if days is not None else 30
+    auth = await optional_db_user(session, request)
+    if auth is not None and days is None:
+        user_row = await UsersRepo(session).get_by_id(auth.id)
+        if user_row is not None and is_pro(auth) and user_row.comps_days in ALLOWED_COMPS_DAYS:
+            window = user_row.comps_days
+    return await get_source_prices(session, card_id, days=window)
 
 
 @router.get("/{card_id}/population", response_model=PopulationOut)

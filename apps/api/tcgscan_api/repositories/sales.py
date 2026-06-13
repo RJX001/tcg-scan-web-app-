@@ -103,13 +103,14 @@ class SalesRepo:
 
     async def source_summary(
         self, card_id: uuid.UUID, *, days: int = 30
-    ) -> dict[str, float]:
-        """Median USD per source for price tiles."""
+    ) -> dict[str, tuple[float, int]]:
+        """Mean USD and sample count per marketplace source."""
         since = datetime.now() - timedelta(days=days)
         stmt = (
             select(
                 SaleEvent.source,
-                func.percentile_cont(0.5).within_group(SaleEvent.price_usd.asc()),
+                func.avg(SaleEvent.price_usd),
+                func.count(SaleEvent.id),
             )
             .where(
                 SaleEvent.card_id == card_id,
@@ -119,7 +120,11 @@ class SalesRepo:
             .group_by(SaleEvent.source)
         )
         rows = (await self._session.execute(stmt)).all()
-        return {str(src): float(med) for src, med in rows if med is not None}
+        out: dict[str, tuple[float, int]] = {}
+        for src, avg_usd, count in rows:
+            if avg_usd is not None:
+                out[str(src)] = (float(avg_usd), int(count))
+        return out
 
     async def rollup_day(self, card_id: uuid.UUID, day: datetime) -> int:
         """Compute roll-ups per grade_bucket for a given (card_id, day). Returns rows written."""

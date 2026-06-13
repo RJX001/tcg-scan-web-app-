@@ -13,6 +13,9 @@ _ENV_FILE = _REPO_ROOT / ".env"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(_ENV_FILE), extra="ignore")
 
+    environment: str = Field(default="development", alias="ENVIRONMENT")
+    cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
+
     database_url: str = Field(
         default="postgresql+asyncpg://tcgscan:tcgscan@localhost:5432/tcgscan",
         alias="DATABASE_URL",
@@ -32,6 +35,7 @@ class Settings(BaseSettings):
 
     ebay_app_id: str | None = Field(default=None, alias="EBAY_APP_ID")
     ebay_cert_id: str | None = Field(default=None, alias="EBAY_CERT_ID")
+    ebay_marketplace_id: str = Field(default="EBAY_GB", alias="EBAY_MARKETPLACE_ID")
     tcg_api_key: str | None = Field(default=None, alias="TCG_API_KEY")
     apify_token: str | None = Field(default=None, alias="APIFY_TOKEN")
 

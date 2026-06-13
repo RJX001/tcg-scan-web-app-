@@ -11,7 +11,7 @@ type Props = {
   uppercase?: boolean;
 };
 
-export function RegionFilterBar({ value, onChange, uppercase = false }: Props) {
+export function RegionFilterBar({ value, onChange, uppercase = true }: Props) {
   return (
     <div className={`flex flex-wrap gap-2 ${uppercase ? "uppercase" : ""}`}>
       {MARKET_REGION_FILTERS.map((f) => (
@@ -19,7 +19,7 @@ export function RegionFilterBar({ value, onChange, uppercase = false }: Props) {
           key={f.id}
           type="button"
           onClick={() => onChange(f.id)}
-          className={`rounded-full px-3 py-1 text-xs ${
+          className={`rounded-full px-3 py-1 text-xs font-semibold tracking-wide ${
             value === f.id ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"
           }`}
         >

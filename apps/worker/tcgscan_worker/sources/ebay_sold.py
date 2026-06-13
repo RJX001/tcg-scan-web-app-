@@ -27,12 +27,13 @@ class EbaySoldSource(PriceSource):
     BASE_URL = "https://api.ebay.com"
 
     def _build_client(self) -> ResilientClient:
+        marketplace = os.environ.get("EBAY_MARKETPLACE_ID", "EBAY_GB")
         return ResilientClient(
             base_url=self.BASE_URL,
             rate_per_sec=2.0,
             burst=4,
             headers={
-                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+                "X-EBAY-C-MARKETPLACE-ID": marketplace,
                 "Accept": "application/json",
             },
         )

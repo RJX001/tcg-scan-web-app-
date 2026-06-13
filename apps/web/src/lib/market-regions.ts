@@ -2,10 +2,10 @@ export type MarketRegion = "us" | "uk" | "eu";
 export type MarketRegionFilter = "all" | MarketRegion;
 
 export const MARKET_REGION_FILTERS: { id: MarketRegionFilter; label: string }[] = [
-  { id: "all", label: "All markets" },
-  { id: "us", label: "US sales" },
-  { id: "uk", label: "UK sales" },
-  { id: "eu", label: "EU sales" },
+  { id: "all", label: "ALL MARKETS" },
+  { id: "uk", label: "UK SALES" },
+  { id: "us", label: "US SALES" },
+  { id: "eu", label: "EU SALES" },
 ];
 
 type RegionInput = {

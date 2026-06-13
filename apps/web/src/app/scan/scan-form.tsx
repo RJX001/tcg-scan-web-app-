@@ -1,6 +1,7 @@
 "use client";
 
 import { ConditionPanel } from "@/components/condition-panel";
+import { MarketplacePrices } from "@/components/marketplace-prices";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import type { ScanMatch, ScanResult } from "@tcgscan/sdk-ts";
 import { scanCard } from "@tcgscan/sdk-ts";
@@ -270,12 +271,20 @@ export function ScanForm() {
                 );
               })}
             </ul>
-            {confirmed && selectedSlug && (
-              <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-900">
-                Confirmed: <strong>{selectedMatch?.name}</strong>.{" "}
-                <Link href={`/card/${selectedSlug}`} className="font-medium underline">
-                  Open card detail →
-                </Link>
+            {confirmed && selectedMatch && (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-lg bg-green-50 p-3 text-sm text-green-900">
+                  Confirmed: <strong>{selectedMatch.name}</strong>
+                  {selectedSlug ? (
+                    <>
+                      .{" "}
+                      <Link href={`/card/${selectedSlug}`} className="font-medium underline">
+                        Open full card detail →
+                      </Link>
+                    </>
+                  ) : null}
+                </div>
+                <MarketplacePrices cardId={selectedMatch.card_id} />
               </div>
             )}
             {result.stages_ms && (

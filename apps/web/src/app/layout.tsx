@@ -6,15 +6,29 @@ import { PwaRegister } from "@/components/pwa-register";
 import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
 import "./globals.css";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "TCG Scan — Price guide for every card",
+  metadataBase: new URL(siteUrl),
+  title: "TCG Chart — Price guide for every card",
   description:
-    "Scan any trading card. See cross-marketplace comps, condition estimates, and grading ROI.",
-  applicationName: "TCG Scan",
+    "Cross-marketplace comps for Pokémon, MTG, Yu-Gi-Oh!, sports and more. Ladder, shop, and grading ROI.",
+  applicationName: "TCG Chart",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "TCG Scan",
+    title: "TCG Chart",
+  },
+  icons: {
+    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  openGraph: {
+    title: "TCG Chart — Price guide for every card",
+    description:
+      "Cross-marketplace comps, market ladder, and grading ROI for every trading card.",
+    url: siteUrl,
+    siteName: "TCG Chart",
   },
   formatDetection: { telephone: false },
 };
@@ -47,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-30 hidden border-b border-zinc-200 bg-white/95 backdrop-blur sm:block">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
             <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
-              TCG<span className="text-blue-700">Scan</span>
+              TCG<span className="text-blue-700">Chart</span>
             </Link>
             <ul className="flex items-center gap-5 text-sm">
               {NAV.map((item) => (
@@ -73,7 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur sm:hidden">
           <div className="flex items-center justify-between px-4 py-3">
             <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
-              TCG<span className="text-blue-700">Scan</span>
+              TCG<span className="text-blue-700">Chart</span>
             </Link>
             <div className="flex items-center gap-2">
               <CurrencySelect />

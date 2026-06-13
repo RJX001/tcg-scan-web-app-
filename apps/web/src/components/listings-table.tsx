@@ -2,16 +2,13 @@
 
 import { useMemo, useState } from "react";
 import type { ListingOut } from "@tcgscan/sdk-ts";
-import { GradeFilterBar } from "@/components/grade-filter-bar";
-import { RegionFilterBar } from "@/components/region-filter-bar";
-import {
-  matchesGradeCompanyFilter,
-  type GradeCompanyFilter,
-} from "@/lib/grade-filters";
+import { SalesTableFilters } from "@/components/sales-table-filters";
+import { matchesGradeFilter, type GradeCompanyFilter } from "@/lib/grade-filters";
 import {
   matchesMarketRegionFilter,
   type MarketRegionFilter,
 } from "@/lib/market-regions";
+import { formatGradeLabel, formatSourceLabel } from "@/lib/sales-display";
 
 /** Listings carry their source currency (eBay USD, Cardmarket EUR, …) — show it honestly. */
 function fmtNative(n: number, currency: string) {
@@ -29,22 +26,25 @@ type Props = {
 export function ListingsTable({ listings }: Props) {
   const sources = useMemo(() => {
     const set = new Set(listings.map((l) => l.source));
-    return ["all", ...Array.from(set).sort()];
+    return Array.from(set);
   }, [listings]);
 
   const [source, setSource] = useState("all");
   const [gradeFilter, setGradeFilter] = useState<GradeCompanyFilter>("all");
+  const [gradeSub, setGradeSub] = useState("");
   const [regionFilter, setRegionFilter] = useState<MarketRegionFilter>("all");
+
+  const availableGrades = useMemo(() => listings.map((l) => l.grade), [listings]);
 
   const filtered = useMemo(
     () =>
       listings.filter(
         (l) =>
           (source === "all" || l.source === source) &&
-          matchesGradeCompanyFilter(l.grade, gradeFilter) &&
+          matchesGradeFilter(l.grade, gradeFilter, gradeSub) &&
           matchesMarketRegionFilter(l, regionFilter),
       ),
-    [listings, source, gradeFilter, regionFilter],
+    [listings, source, gradeFilter, gradeSub, regionFilter],
   );
 
   if (listings.length === 0) {
@@ -54,42 +54,36 @@ export function ListingsTable({ listings }: Props) {
   }
 
   return (
-    <div>
-      <div className="mb-2 space-y-2">
-        <RegionFilterBar value={regionFilter} onChange={setRegionFilter} />
-        <GradeFilterBar value={gradeFilter} onChange={setGradeFilter} />
-        <div className="flex flex-wrap gap-2">
-          {sources.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSource(s)}
-              className={`rounded-full px-3 py-1 text-xs capitalize ${
-                source === s ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-700"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="uppercase">
+      <SalesTableFilters
+        sources={sources}
+        source={source}
+        onSourceChange={setSource}
+        gradeFilter={gradeFilter}
+        gradeSub={gradeSub}
+        onGradeFilterChange={setGradeFilter}
+        onGradeSubChange={setGradeSub}
+        availableGrades={availableGrades}
+        regionFilter={regionFilter}
+        onRegionFilterChange={setRegionFilter}
+      />
       {filtered.length === 0 ? (
-        <p className="text-sm text-zinc-600">No listings match the selected filters.</p>
+        <p className="mt-3 text-sm normal-case text-zinc-600">No listings match the selected filters.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b text-zinc-500">
-                <th className="py-2 pr-4">Price</th>
-                <th className="py-2 pr-4">Grade</th>
-                <th className="py-2 pr-4">Source</th>
-                <th className="py-2">Market</th>
+                <th className="py-2 pr-4">PRICE</th>
+                <th className="py-2 pr-4">GRADE</th>
+                <th className="py-2 pr-4">SOURCE</th>
+                <th className="py-2">MARKET</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((row, i) => (
                 <tr key={`${row.listed_at}-${i}`} className="border-b border-zinc-100">
-                  <td className="py-2 pr-4 font-medium">
+                  <td className="py-2 pr-4 font-medium normal-case">
                     {row.listing_url ? (
                       <a
                         href={row.listing_url}
@@ -103,9 +97,9 @@ export function ListingsTable({ listings }: Props) {
                       fmtNative(row.price, row.currency)
                     )}
                   </td>
-                  <td className="py-2 pr-4">{row.grade ?? "raw"}</td>
-                  <td className="py-2 pr-4">{row.source}</td>
-                  <td className="py-2 uppercase">{row.market_region}</td>
+                  <td className="py-2 pr-4">{formatGradeLabel(row.grade)}</td>
+                  <td className="py-2 pr-4">{formatSourceLabel(row.source)}</td>
+                  <td className="py-2">{row.market_region.toUpperCase()}</td>
                 </tr>
               ))}
             </tbody>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ShowcaseClient } from "./showcase-client";
 
 export const metadata: Metadata = {
-  title: "Showcase — TCG Scan",
+  title: "Showcase — TCG Chart",
   description: "Browse card artwork across every game we track.",
 };
 

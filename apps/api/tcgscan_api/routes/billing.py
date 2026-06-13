@@ -8,11 +8,13 @@ from tcgscan_api.errors import AppError
 from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.billing import (
     AccountOut,
+    AccountPreferencesIn,
     CheckoutOut,
     create_checkout_session,
     create_portal_session,
     get_account,
     handle_stripe_webhook,
+    update_account_preferences,
 )
 
 router = APIRouter(tags=["billing"])
@@ -32,6 +34,18 @@ async def account(
 ) -> AccountOut:
     await resolve_db_user(session, request)
     return await get_account(session, request)
+
+
+@router.patch("/account/preferences", response_model=AccountOut)
+async def account_preferences(
+    body: AccountPreferencesIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AccountOut:
+    try:
+        return await update_account_preferences(session, request, body)
+    except AppError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.post("/billing/checkout", response_model=CheckoutOut)

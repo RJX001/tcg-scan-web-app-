@@ -1,4 +1,4 @@
-/* TCG Scan service worker — offline shell + static asset cache.
+/* TCG Chart service worker — offline shell + static asset cache.
  * Network-first for pages (prices must be fresh), cache-first for static assets. */
 const CACHE = "tcgscan-v1";
 const OFFLINE_URL = "/";

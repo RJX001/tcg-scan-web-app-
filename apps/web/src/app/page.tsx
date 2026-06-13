@@ -34,7 +34,7 @@ export default function LandingPage() {
   return (
     <main className="mx-auto flex min-h-[calc(100vh-57px)] max-w-4xl flex-col gap-10 px-4 py-16">
       <div className="text-center">
-        <p className="text-sm font-medium uppercase tracking-wider text-zinc-500">TCG Scan</p>
+        <p className="text-sm font-medium uppercase tracking-wider text-zinc-500">TCG Chart</p>
         <h1 className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
           Scan once. Know the market.
         </h1>

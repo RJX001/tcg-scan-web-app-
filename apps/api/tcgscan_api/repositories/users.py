@@ -52,6 +52,15 @@ class UsersRepo:
         await self._session.execute(update(User).where(User.id == user_id).values(tier=tier))
         await self._session.commit()
 
+    async def set_comps_days(self, user_id: uuid.UUID, days: int) -> User | None:
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return None
+        user.comps_days = days
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
     async def count_portfolio_items(self, user_id: uuid.UUID) -> int:
         stmt = (
             select(func.count()).select_from(PortfolioItem).where(PortfolioItem.user_id == user_id)

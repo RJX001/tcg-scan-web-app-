@@ -1,6 +1,7 @@
 import { CardActions } from "@/components/card-actions";
 import { CompsTable } from "@/components/comps-table";
 import { ListingsTable } from "@/components/listings-table";
+import { MarketplacePrices } from "@/components/marketplace-prices";
 import { PriceChart } from "@/components/price-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import type {
@@ -131,10 +132,8 @@ export default async function CardDetailPage({ params }: Props) {
             <PriceTile label="30d high" value={<Money usd={summary.max_usd} />} />
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <PriceTile label="eBay" value={<Money usd={sources.ebay_median_usd} />} />
-            <PriceTile label="TCGPlayer" value={<Money usd={sources.tcgplayer_median_usd} />} />
-            <PriceTile label="Cardmarket" value={<Money usd={sources.cardmarket_median_usd} />} />
+          <div className="mt-4">
+            <MarketplacePrices cardId={card.id} initial={sources} />
           </div>
 
           <p className="mt-4 text-sm text-zinc-500">{summary.count} sold comps in the last 30 days</p>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LadderClient } from "./ladder-client";
 
 export const metadata: Metadata = {
-  title: "Card Price Guide — TCG Scan",
+  title: "Card Price Guide — TCG Chart",
   description:
     "Browse the market ladder: last sold prices, 30-day sales volume, and 1-month price changes across every tracked card.",
 };

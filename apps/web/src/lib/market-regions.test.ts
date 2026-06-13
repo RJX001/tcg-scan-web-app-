@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferMarketRegion, matchesMarketRegionFilter } from "./market-regions";
+import { inferMarketRegion, MARKET_REGION_FILTERS, matchesMarketRegionFilter } from "./market-regions";
 
 describe("market-regions", () => {
   it("classifies US marketplace comps", () => {
@@ -34,6 +34,11 @@ describe("market-regions", () => {
         listing_url: "https://www.cardmarket.com/en/Pokemon/123",
       }),
     ).toBe("eu");
+  });
+
+  it("lists regions with UK before US and EU", () => {
+    const ids = MARKET_REGION_FILTERS.map((f) => f.id);
+    expect(ids).toEqual(["all", "uk", "us", "eu"]);
   });
 
   it("filters by selected market region", () => {

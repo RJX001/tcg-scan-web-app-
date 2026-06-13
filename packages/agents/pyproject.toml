@@ -20,6 +20,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["tcgscan_agents"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"tcgscan_agents/py.typed" = "tcgscan_agents/py.typed"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

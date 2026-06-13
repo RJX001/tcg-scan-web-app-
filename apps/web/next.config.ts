@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "images.pokemontcg.io", pathname: "/**" },
       { protocol: "https", hostname: "cards.scryfall.io", pathname: "/**" },
+      { protocol: "https", hostname: "images.ygoprodeck.com", pathname: "/**" },
+      { protocol: "https", hostname: "i.ebayimg.com", pathname: "/**" },
+      { protocol: "https", hostname: "optcgapi.com", pathname: "/**" },
+      { protocol: "https", hostname: "cards.lorcast.io", pathname: "/**" },
+      { protocol: "https", hostname: "tcgplayer-cdn.tcgplayer.com", pathname: "/**" },
     ],
   },
 };

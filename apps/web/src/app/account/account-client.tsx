@@ -1,13 +1,14 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
-import { getAccount, openBillingPortal, startCheckout } from "@tcgscan/sdk-ts";
+import { getAccount, openBillingPortal, startCheckout, updateAccountPreferences } from "@tcgscan/sdk-ts";
 import { useCallback, useEffect, useState } from "react";
 
 export function AccountClient() {
   const [account, setAccount] = useState<Awaited<ReturnType<typeof getAccount>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +77,45 @@ export function AccountClient() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Price comp window</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-zinc-600">
+            Marketplace averages (eBay, TCGPlayer, Cardmarket) use this lookback on scan results and card
+            pages. Free: 30 days.
+          </p>
+          {isPro ? (
+            <label className="flex flex-wrap items-center gap-2">
+              <span className="text-zinc-700">Average window</span>
+              <select
+                value={account.comps_days ?? 30}
+                disabled={savingPrefs}
+                onChange={(e) => {
+                  const comps_days = Number(e.target.value);
+                  setSavingPrefs(true);
+                  void updateAccountPreferences({ comps_days })
+                    .then(setAccount)
+                    .catch((err: unknown) => {
+                      setError(err instanceof Error ? err.message : "Failed to save preference");
+                    })
+                    .finally(() => setSavingPrefs(false));
+                }}
+                className="rounded-lg border border-zinc-300 px-2 py-1"
+              >
+                <option value={7}>7 days</option>
+                <option value={30}>30 days</option>
+                <option value={90}>90 days</option>
+                <option value={180}>180 days</option>
+              </select>
+            </label>
+          ) : (
+            <p className="text-zinc-500">Upgrade to Pro to use 7, 90, or 180-day windows.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>What Pro unlocks</CardTitle>
         </CardHeader>
         <CardContent>
@@ -83,6 +123,7 @@ export function AccountClient() {
             <li>Unlimited scans</li>
             <li>Unlimited portfolio</li>
             <li>Price alerts</li>
+            <li>Custom marketplace comp window (7–180 days)</li>
             <li>Daily market digest (coming soon)</li>
           </ul>
         </CardContent>
