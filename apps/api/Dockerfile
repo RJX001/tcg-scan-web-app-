@@ -17,4 +17,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-CMD sh -c "cd apps/api && alembic upgrade head && uvicorn tcgscan_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD ["sh", "-c", "cd /app && alembic --config apps/api/alembic.ini upgrade head && uvicorn tcgscan_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
