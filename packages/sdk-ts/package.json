@@ -1,0 +1,20 @@
+{
+  "name": "@tcgscan/sdk-ts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "generate": "node scripts/generate.mjs",
+    "lint": "echo 'sdk-ts lint ok'",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

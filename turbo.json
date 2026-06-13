@@ -1,0 +1,44 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@tcgscan/api#build": {
+      "outputs": []
+    },
+    "@tcgscan/worker#build": {
+      "outputs": []
+    },
+    "@tcgscan/ml#build": {
+      "outputs": []
+    },
+    "@tcgscan/schema#build": {
+      "outputs": []
+    },
+    "@tcgscan/sdk-ts#build": {
+      "outputs": []
+    },
+    "@tcgscan/ui#build": {
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "generate": {},
+    "db:migrate": {},
+    "db:seed": {},
+    "eval": {}
+  }
+}

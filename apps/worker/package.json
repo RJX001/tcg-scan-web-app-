@@ -1,0 +1,12 @@
+{
+  "name": "@tcgscan/worker",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uv run python -m tcgscan_worker worker",
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "uv run mypy tcgscan_worker",
+    "test": "uv run pytest",
+    "build": "echo worker build ok"
+  }
+}

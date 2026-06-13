@@ -1,0 +1,11 @@
+[detect]
+version = "0.0.0-stub"
+path = "modal-volume://detect/weights.pt"
+
+[embed]
+version = "0.0.0-stub"
+path = "modal-volume://embed/weights.pt"
+
+[grade]
+version = "0.0.0-stub"
+path = "modal-volume://grade/weights.pt"

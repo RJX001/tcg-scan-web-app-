@@ -1,0 +1,32 @@
+{
+  "name": "tcg-scan",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "schema:build": "turbo run build --filter=@tcgscan/schema",
+    "sdk:generate": "turbo run generate --filter=@tcgscan/sdk-ts",
+    "db:migrate": "turbo run db:migrate --filter=@tcgscan/api",
+    "db:seed": "turbo run db:seed --filter=@tcgscan/api",
+    "db:demo": "pnpm db:migrate && pnpm db:seed && uv run python -m tcgscan_worker embed:catalog --game pokemon",
+    "eval": "turbo run eval --filter=@tcgscan/ml",
+    "worker": "turbo run dev --filter=@tcgscan/worker",
+    "ingest:catalog": "uv run python -m tcgscan_worker ingest:catalog",
+    "embed:catalog": "uv run python -m tcgscan_worker embed:catalog",
+    "rollup:daily": "uv run python -m tcgscan_worker rollup:daily",
+    "ingest:pricing": "uv run python -m tcgscan_worker ingest:pricing",
+    "schedules:register": "uv run python -m tcgscan_worker schedules:register",
+    "catalog:all": "uv run python -m tcgscan_worker ingest:catalog --game pokemon && uv run python -m tcgscan_worker ingest:catalog --game mtg && uv run python -m tcgscan_worker ingest:catalog --game yugioh && uv run python -m tcgscan_worker ingest:catalog --game lorcana && uv run python -m tcgscan_worker ingest:catalog --game one_piece && uv run python -m tcgscan_worker ingest:catalog --game sports"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

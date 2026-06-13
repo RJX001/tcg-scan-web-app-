@@ -1,0 +1,13 @@
+{
+  "name": "@tcgscan/ml",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'ml: use modal serve apps/ml/app.py'",
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "uv run mypy tcgscan_ml",
+    "test": "uv run pytest",
+    "build": "echo ml build ok",
+    "eval": "uv run python -m tcgscan_ml.eval.runner"
+  }
+}

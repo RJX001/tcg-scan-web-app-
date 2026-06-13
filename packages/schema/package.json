@@ -1,0 +1,20 @@
+{
+  "name": "@tcgscan/schema",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "echo 'schema lint ok'",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/build.mjs && vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
+    "zod": "^3.25.67"
+  },
+  "dependencies": {
+    "zod": "^3.25.67"
+  }
+}
