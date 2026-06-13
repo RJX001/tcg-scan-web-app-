@@ -7,14 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy entire monorepo (Railway build context = repo root)
 COPY . .
 
 RUN uv sync --frozen --package tcgscan-api --no-dev
 
-ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "cd /app/apps/api && alembic upgrade head && cd /app && uvicorn tcgscan_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uv run --package tcgscan-api alembic -c apps/api/alembic.ini upgrade head && uv run --package tcgscan-api uvicorn tcgscan_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
