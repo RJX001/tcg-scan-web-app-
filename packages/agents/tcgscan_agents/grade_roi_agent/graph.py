@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
@@ -42,15 +42,16 @@ def rules_node(state: GradeROIState) -> GradeROIState:
                 summary = r.json()
     except httpx.HTTPError:
         pass
-    median = summary.get("median_usd")
+    median_raw = summary.get("median_usd")
     cost = 25.0
-    if median is None:
+    if not isinstance(median_raw, (int, float)):
         return {
             **state,
             "output": GradeROIOutput(action="HOLD", reason="Insufficient comps for ROI."),
         }
-    graded_est = float(median) * 2.5
-    profit = graded_est - float(median) - cost
+    median = float(median_raw)
+    graded_est = median * 2.5
+    profit = graded_est - median - cost
     if inp.psa_high >= 9 and profit >= 40:
         action: Literal["HOLD", "SELL", "GRADE", "BUY"] = "GRADE"
         reason = f"Estimated ${profit:.0f} upside after grading."
@@ -74,8 +75,8 @@ def synthesis_node(state: GradeROIState) -> GradeROIState:
     return state
 
 
-def build_grade_roi_graph() -> StateGraph:
-    g: StateGraph = StateGraph(GradeROIState)
+def build_grade_roi_graph() -> Any:
+    g = StateGraph(GradeROIState)
     g.add_node("rules", rules_node)
     g.add_node("synthesis", synthesis_node)
     g.set_entry_point("rules")

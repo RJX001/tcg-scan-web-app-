@@ -12,9 +12,9 @@ export function formatGradeLabel(grade: string | null | undefined): string {
 
 export function sourceFilterOptions(available: string[]): string[] {
   const set = new Set(available.filter((s) => s !== "all"));
-  const ordered = SOURCE_ORDER.filter((s) => set.has(s));
+  const ordered: string[] = SOURCE_ORDER.filter((s) => set.has(s));
   for (const s of Array.from(set).sort()) {
-    if (!ordered.includes(s as (typeof SOURCE_ORDER)[number])) ordered.push(s);
+    if (!ordered.includes(s)) ordered.push(s);
   }
   return ["all", ...ordered];
 }

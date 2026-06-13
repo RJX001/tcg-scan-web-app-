@@ -1,4 +1,4 @@
-"""Dev seed — Pokemon sample cards + eBay comps for vertical slice demo."""
+"""Dev seed — multi-TCG sample cards + marketplace comps for scan/search demo."""
 
 from __future__ import annotations
 
@@ -15,6 +15,11 @@ from tcgscan_api.repositories.market import PopulationRepo
 from tcgscan_api.repositories.sales import SalesRepo
 from tcgscan_api.repositories.users import UsersRepo
 from tcgscan_api.services.slug import card_slug
+
+MTG_BOLT_ID = uuid.UUID("88111111-1111-4111-8111-111111111111")
+YGO_DARK_MAGICIAN_ID = uuid.UUID("88222222-2222-4222-8222-222222222222")
+LORCANA_MICKEY_ID = uuid.UUID("88333333-3333-4333-8333-333333333333")
+ONE_PIECE_LUFFY_ID = uuid.UUID("88444444-4444-4444-8444-444444444444")
 
 # Stable UUIDs for dev fixtures
 CHARIZARD_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
@@ -35,6 +40,10 @@ PREV_MONTH_MULTIPLIER: dict[uuid.UUID, Decimal] = {
     MEWTWO_ID: Decimal("1.18"),  # big loser
     ALAKAZAM_ID: Decimal("0.97"),
     GYARADOS_ID: Decimal("1.02"),
+    MTG_BOLT_ID: Decimal("0.95"),
+    YGO_DARK_MAGICIAN_ID: Decimal("0.88"),
+    LORCANA_MICKEY_ID: Decimal("1.08"),
+    ONE_PIECE_LUFFY_ID: Decimal("0.91"),
 }
 
 # (card_id, ebay_base_usd, tcgplayer_usd, cardmarket_usd)
@@ -46,6 +55,10 @@ PRICES: dict[uuid.UUID, tuple[Decimal, Decimal, Decimal]] = {
     MEWTWO_ID: (Decimal("45.00"), Decimal("48.00"), Decimal("42.00")),
     ALAKAZAM_ID: (Decimal("38.00"), Decimal("41.00"), Decimal("36.00")),
     GYARADOS_ID: (Decimal("52.00"), Decimal("55.00"), Decimal("49.00")),
+    MTG_BOLT_ID: (Decimal("3.50"), Decimal("4.25"), Decimal("3.80")),
+    YGO_DARK_MAGICIAN_ID: (Decimal("28.00"), Decimal("32.00"), Decimal("26.50")),
+    LORCANA_MICKEY_ID: (Decimal("12.00"), Decimal("14.50"), Decimal("11.00")),
+    ONE_PIECE_LUFFY_ID: (Decimal("18.00"), Decimal("22.00"), Decimal("16.50")),
 }
 
 
@@ -139,14 +152,73 @@ CARDS: list[dict[str, object]] = [
         "attributes": {"hp": "100", "type": "Water"},
         "external_ids": {"pokemontcg": "base1-6"},
     },
+    {
+        "id": MTG_BOLT_ID,
+        "game": Game.mtg,
+        "name": "Lightning Bolt",
+        "set_code": "m10",
+        "set_name": "Magic 2010",
+        "number": "146",
+        "rarity": "common",
+        "image_urls": {
+            "normal": "https://cards.scryfall.io/normal/front/0/4/0431e2e3-ebf4-44e5-931b-0c416e76a1b8.jpg",
+            "large": "https://cards.scryfall.io/large/front/0/4/0431e2e3-ebf4-44e5-931b-0c416e76a1b8.jpg",
+        },
+        "attributes": {"type_line": "Instant", "mana_cost": "{R}"},
+        "external_ids": {"scryfall_id": "0431e2e3-ebf4-44e5-931b-0c416e76a1b8"},
+    },
+    {
+        "id": YGO_DARK_MAGICIAN_ID,
+        "game": Game.yugioh,
+        "name": "Dark Magician",
+        "set_code": "sdy",
+        "set_name": "Starter Deck: Yugi",
+        "number": "006",
+        "rarity": "Ultra Rare",
+        "image_urls": {
+            "small": "https://images.ygoprodeck.com/images/cards_small/46986414.jpg",
+            "large": "https://images.ygoprodeck.com/images/cards/46986414.jpg",
+        },
+        "attributes": {"type": "Spellcaster", "level": 7},
+        "external_ids": {"ygoprodeck_id": "46986414"},
+    },
+    {
+        "id": LORCANA_MICKEY_ID,
+        "game": Game.lorcana,
+        "name": "Mickey Mouse - Brave Little Tailor",
+        "set_code": "tfc",
+        "set_name": "The First Chapter",
+        "number": "001",
+        "rarity": "Legendary",
+        "image_urls": {
+            "large": "https://cards.lorcast.io/card/digital/large/TFC/001/en",
+        },
+        "attributes": {"cost": 8, "type": "Character"},
+        "external_ids": {"lorcast_id": "TFC-001"},
+    },
+    {
+        "id": ONE_PIECE_LUFFY_ID,
+        "game": Game.one_piece,
+        "name": "Monkey.D.Luffy",
+        "set_code": "op01",
+        "set_name": "Romance Dawn",
+        "number": "001",
+        "rarity": "Leader",
+        "image_urls": {
+            "large": "https://optcgapi.com/images/cards/OP01-001.png",
+        },
+        "attributes": {"color": "Red", "type": "Leader"},
+        "external_ids": {"optcgapi_id": "OP01-001"},
+    },
 ]
 
 DEMO_SLUGS = [
     card_slug(Game.pokemon, "base1", "4/102"),
-    card_slug(Game.pokemon, "base1", "2/102"),
-    card_slug(Game.pokemon, "base1", "15/102"),
     card_slug(Game.pokemon, "base1", "58/102"),
-    card_slug(Game.pokemon, "base1", "10/102"),
+    card_slug(Game.mtg, "m10", "146"),
+    card_slug(Game.yugioh, "sdy", "006"),
+    card_slug(Game.lorcana, "tfc", "001"),
+    card_slug(Game.one_piece, "op01", "001"),
 ]
 
 
@@ -162,6 +234,10 @@ POPULATIONS: dict[uuid.UUID, tuple[int, int, int]] = {
     MEWTWO_ID: (1893, 6534, 4002),
     ALAKAZAM_ID: (1278, 5210, 3540),
     GYARADOS_ID: (1654, 5879, 3877),
+    MTG_BOLT_ID: (890, 4200, 3100),
+    YGO_DARK_MAGICIAN_ID: (2100, 9800, 7200),
+    LORCANA_MICKEY_ID: (540, 2100, 1500),
+    ONE_PIECE_LUFFY_ID: (1200, 4500, 3200),
 }
 
 
@@ -331,7 +407,16 @@ async def seed_async() -> None:
             assert isinstance(cid, uuid.UUID)
             ebay_base = PRICES.get(cid, (Decimal("10.00"), Decimal("10.00"), Decimal("10.00")))[0]
             sales.extend(_sample_sales(cid, ebay_base))
-            if cid in (CHARIZARD_ID, BLASTOISE_ID, PIKACHU_ID, MEWTWO_ID):
+            if cid in (
+                CHARIZARD_ID,
+                BLASTOISE_ID,
+                PIKACHU_ID,
+                MEWTWO_ID,
+                MTG_BOLT_ID,
+                YGO_DARK_MAGICIAN_ID,
+                LORCANA_MICKEY_ID,
+                ONE_PIECE_LUFFY_ID,
+            ):
                 listings.extend(_sample_listings(cid, ebay_base))
 
         await SalesRepo(session).bulk_insert(sales)
@@ -372,7 +457,7 @@ async def seed_async() -> None:
         if dev_user.tier != UserTier.pro:
             await UsersRepo(session).set_tier(dev_user.id, UserTier.pro)
 
-    print(f"db:seed — inserted {len(CARDS)} Pokemon cards + comps, listings + daily rollups")
+    print(f"db:seed — inserted {len(CARDS)} catalog cards (Pokemon, MTG, Yu-Gi-Oh!, Lorcana, One Piece)")
     print("  dev-user tier: pro (alerts + digest enabled)")
     print("  demo slugs:")
     for slug in DEMO_SLUGS:

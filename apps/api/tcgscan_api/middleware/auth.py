@@ -81,11 +81,11 @@ async def resolve_user(request: Request) -> AuthUser | None:
             clerk_id=dev_id,
         )
     if settings.dev_auth_enabled and settings.clerk_secret_key:
-        dev_id = request.headers.get("X-Dev-User-Id")
-        if dev_id:
+        header_dev_id = request.headers.get("X-Dev-User-Id")
+        if header_dev_id:
             return AuthUser(
-                id=uuid.uuid5(uuid.NAMESPACE_DNS, dev_id),
-                clerk_id=dev_id,
+                id=uuid.uuid5(uuid.NAMESPACE_DNS, header_dev_id),
+                clerk_id=header_dev_id,
             )
     return None
 

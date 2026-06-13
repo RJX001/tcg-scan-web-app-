@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
@@ -49,8 +49,8 @@ async def evaluate_node(state: MonitorState) -> MonitorState:
     }
 
 
-def build_monitor_graph() -> StateGraph:
-    g: StateGraph = StateGraph(MonitorState)
+def build_monitor_graph() -> Any:
+    g = StateGraph(MonitorState)
     g.add_node("evaluate", evaluate_node)
     g.set_entry_point("evaluate")
     g.add_edge("evaluate", END)

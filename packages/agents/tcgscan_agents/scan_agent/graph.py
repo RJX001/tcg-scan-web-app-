@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -36,8 +36,8 @@ async def pricing_node(state: ScanState) -> ScanState:
     return state
 
 
-def build_scan_graph() -> StateGraph:
-    g: StateGraph = StateGraph(ScanState)
+def build_scan_graph() -> Any:
+    g = StateGraph(ScanState)
     g.add_node("match", match_node)
     g.add_node("pricing", pricing_node)
     g.set_entry_point("match")

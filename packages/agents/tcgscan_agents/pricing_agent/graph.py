@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
@@ -40,8 +40,8 @@ async def fetch_node(state: PricingState) -> PricingState:
     }
 
 
-def build_pricing_graph() -> StateGraph:
-    g: StateGraph = StateGraph(PricingState)
+def build_pricing_graph() -> Any:
+    g = StateGraph(PricingState)
     g.add_node("fetch", fetch_node)
     g.set_entry_point("fetch")
     g.add_edge("fetch", END)

@@ -32,7 +32,14 @@ async def fetch_active_listings(card_id: str) -> list[dict[str, Any]]:
         r = await client.get(f"{_api_base()}/v1/cards/{card_id}/listings")
         if r.status_code != 200:
             return []
-        return r.json()
+        raw = r.json()
+        if not isinstance(raw, list):
+            return []
+        listings: list[dict[str, Any]] = []
+        for item in raw:
+            if isinstance(item, dict):
+                listings.append(item)
+        return listings
 
 
 async def grading_cost_usd(company: str = "PSA") -> float:
