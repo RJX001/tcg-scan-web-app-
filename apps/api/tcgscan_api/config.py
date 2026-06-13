@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     clerk_authorized_parties: str | None = Field(
         default="http://localhost:3000", alias="CLERK_AUTHORIZED_PARTIES"
     )
+    owner_email: str = Field(default="", alias="OWNER_EMAIL")
     dev_auth_enabled: bool = Field(default=True, alias="DEV_AUTH_ENABLED")
     free_scans_per_day: int = Field(default=10, alias="FREE_SCANS_PER_DAY")
     free_portfolio_limit: int = Field(default=25, alias="FREE_PORTFOLIO_LIMIT")

@@ -39,6 +39,15 @@ async def account(
     return await get_account(session, request)
 
 
+@router.get("/me", response_model=AccountOut)
+async def me(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AccountOut:
+    await resolve_db_user(session, request)
+    return await get_account(session, request)
+
+
 @router.patch("/account/preferences", response_model=AccountOut)
 async def account_preferences(
     body: AccountPreferencesIn,

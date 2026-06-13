@@ -6,7 +6,7 @@ from __future__ import annotations
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tcgscan_api.db.models import User, UserTier
+from tcgscan_api.db.models import User, UserRole, UserTier
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.users import UsersRepo
 
@@ -23,6 +23,7 @@ async def resolve_db_user(session: AsyncSession, request: Request) -> AuthUser:
         id=user.id,
         clerk_id=user.clerk_id,
         tier=_tier_value(user),
+        role=_role_value(user),
         email=user.email,
     )
 
@@ -30,6 +31,11 @@ async def resolve_db_user(session: AsyncSession, request: Request) -> AuthUser:
 def _tier_value(user: User) -> str:
     tier = user.tier
     return tier.value if isinstance(tier, UserTier) else str(tier)
+
+
+def _role_value(user: User) -> str:
+    role = user.role
+    return role.value if isinstance(role, UserRole) else str(role)
 
 
 async def optional_db_user(session: AsyncSession, request: Request) -> AuthUser | None:
@@ -43,6 +49,7 @@ async def optional_db_user(session: AsyncSession, request: Request) -> AuthUser 
         id=user.id,
         clerk_id=user.clerk_id,
         tier=_tier_value(user),
+        role=_role_value(user),
         email=user.email,
     )
 

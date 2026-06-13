@@ -17,6 +17,7 @@ class AuthUser:
     id: uuid.UUID
     clerk_id: str
     tier: str = "free"
+    role: str = "user"
     email: str | None = None
 
 

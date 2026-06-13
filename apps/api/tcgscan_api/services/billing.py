@@ -27,6 +27,8 @@ class AccountOut(BaseModel):
     clerk_id: str
     email: str | None = None
     tier: str
+    role: str = "user"
+    account_number: str | None = None
     portfolio_limit: int | None = None
     scans_per_day: int | None = None
     comps_days: int = 30
@@ -64,6 +66,8 @@ async def get_account(session: AsyncSession, request: Request) -> AccountOut:
         clerk_id=auth.clerk_id,
         email=auth.email,
         tier=auth.tier,
+        role=auth.role,
+        account_number=user_row.account_number if user_row is not None else None,
         portfolio_limit=None if is_pro(auth) else settings.free_portfolio_limit,
         scans_per_day=None if is_pro(auth) else settings.free_scans_per_day,
         comps_days=comps_days,

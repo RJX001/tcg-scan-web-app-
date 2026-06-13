@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.5.2",
     "@tcgscan/sdk-ts": "workspace:*",
     "@tcgscan/ui": "workspace:*",
     "lucide-react": "^0.511.0",

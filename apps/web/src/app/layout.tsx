@@ -1,5 +1,13 @@
 import Link from "next/link";
 import type { Metadata, Viewport } from "next";
+import {
+  ClerkProvider,
+  Show,
+  SignInButton,
+  UserButton,
+} from "@clerk/nextjs";
+import { AdminNavLink } from "@/components/admin-nav-link";
+import { AuthBridge } from "@/components/auth-bridge";
 import { BottomNav } from "@/components/bottom-nav";
 import { DevBanner } from "@/components/dev-banner";
 import { PwaRegister } from "@/components/pwa-register";
@@ -55,58 +63,89 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-zinc-50 text-zinc-900 antialiased">
-        <CurrencyProvider>
-        <PwaRegister />
-        <DevBanner />
-        <header className="sticky top-0 z-30 hidden border-b border-zinc-200 bg-white/95 backdrop-blur sm:block">
-          <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
-              TCG<span className="text-blue-700">Chart</span>
-            </Link>
-            <ul className="flex items-center gap-5 text-sm">
-              {NAV.map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={
-                      item.href === "/scan"
-                        ? "rounded-full bg-blue-700 px-4 py-1.5 font-semibold text-white hover:bg-blue-800"
-                        : "font-medium text-zinc-600 hover:text-zinc-900"
-                    }
-                  >
-                    {item.label}
+        <ClerkProvider>
+          <CurrencyProvider>
+            <PwaRegister />
+            <AuthBridge />
+            <DevBanner />
+            <header className="sticky top-0 z-30 hidden border-b border-zinc-200 bg-white/95 backdrop-blur sm:block">
+              <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+                <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
+                  TCG<span className="text-blue-700">Chart</span>
+                </Link>
+                <ul className="flex items-center gap-5 text-sm">
+                  {NAV.map((item) => (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={
+                          item.href === "/scan"
+                            ? "rounded-full bg-blue-700 px-4 py-1.5 font-semibold text-white hover:bg-blue-800"
+                            : "font-medium text-zinc-600 hover:text-zinc-900"
+                        }
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                  <li>
+                    <CurrencySelect />
+                  </li>
+                  <li>
+                    <AdminNavLink />
+                  </li>
+                  <li>
+                    <Show when="signed-out">
+                      <SignInButton mode="modal">
+                        <button
+                          type="button"
+                          className="rounded-full bg-blue-700 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
+                        >
+                          Sign in
+                        </button>
+                      </SignInButton>
+                    </Show>
+                    <Show when="signed-in">
+                      <UserButton />
+                    </Show>
+                  </li>
+                </ul>
+              </nav>
+            </header>
+            <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur sm:hidden">
+              <div className="flex items-center justify-between px-4 py-3">
+                <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
+                  TCG<span className="text-blue-700">Chart</span>
+                </Link>
+                <div className="flex items-center gap-2">
+                  <CurrencySelect />
+                  <Show when="signed-out">
+                    <SignInButton mode="modal">
+                      <button type="button" className="text-sm font-semibold text-blue-700">
+                        Sign in
+                      </button>
+                    </SignInButton>
+                  </Show>
+                  <Show when="signed-in">
+                    <UserButton />
+                  </Show>
+                  <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
                   </Link>
-                </li>
-              ))}
-              <li>
-                <CurrencySelect />
-              </li>
-            </ul>
-          </nav>
-        </header>
-        <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur sm:hidden">
-          <div className="flex items-center justify-between px-4 py-3">
-            <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
-              TCG<span className="text-blue-700">Chart</span>
-            </Link>
-            <div className="flex items-center gap-2">
-              <CurrencySelect />
-              <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </header>
-        <div className="pb-24 sm:pb-0">{children}</div>
-        <BottomNav />
-        </CurrencyProvider>
+                </div>
+              </div>
+            </header>
+            <div className="pb-24 sm:pb-0">{children}</div>
+            <BottomNav />
+          </CurrencyProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

@@ -153,6 +153,13 @@ class UserTier(str, enum.Enum):
     pro = "pro"
 
 
+class UserRole(str, enum.Enum):
+    user = "user"
+    admin = "admin"
+    admin_senior = "admin_senior"
+    owner = "owner"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -161,6 +168,16 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255))
     tier: Mapped[UserTier] = mapped_column(
         Enum(UserTier, name="user_tier", native_enum=False), nullable=False, default=UserTier.free
+    )
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role", native_enum=False),
+        nullable=False,
+        default=UserRole.user,
+        server_default="user",
+    )
+    account_seq: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    account_number: Mapped[str] = mapped_column(
+        String(16), unique=True, nullable=False, index=True
     )
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
     comps_days: Mapped[int] = mapped_column(

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from tcgscan_api.db.models import Game, SaleKind, UserTier
+from tcgscan_api.db.models import Game, SaleKind, UserRole, UserTier
 from tcgscan_api.db.session import get_sessionmaker
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.fx import FxRepo
@@ -456,9 +456,11 @@ async def seed_async() -> None:
         )
         if dev_user.tier != UserTier.pro:
             await UsersRepo(session).set_tier(dev_user.id, UserTier.pro)
+        if dev_user.role != UserRole.owner:
+            await UsersRepo(session).set_role(dev_user.id, UserRole.owner)
 
     print(f"db:seed — inserted {len(CARDS)} catalog cards (Pokemon, MTG, Yu-Gi-Oh!, Lorcana, One Piece)")
-    print("  dev-user tier: pro (alerts + digest enabled)")
+    print("  dev-user tier: pro, role: owner (admin dashboard enabled)")
     print("  demo slugs:")
     for slug in DEMO_SLUGS:
         print(f"    /card/{slug}")

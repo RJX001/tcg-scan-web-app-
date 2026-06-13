@@ -144,21 +144,92 @@ export type AccountOut = {
   clerk_id: string;
   email?: string | null;
   tier: string;
+  role?: string;
+  account_number?: string | null;
   portfolio_limit?: number | null;
   scans_per_day?: number | null;
   comps_days?: number;
 };
 
+export type AdminOverview = {
+  total_users: number;
+  pro_users: number;
+  free_users: number;
+  new_users_24h: number;
+  new_users_7d: number;
+  total_portfolio_items: number;
+  total_watchlist_items: number;
+  total_alerts: number;
+  cards_in_catalogue: number;
+  sale_events_total: number;
+  sale_events_24h: number;
+  last_price_rollup?: string | null;
+};
+
+export type AdminUserRow = {
+  id: string;
+  account_number: string;
+  email?: string | null;
+  tier: string;
+  role: string;
+  created_at: string;
+  portfolio_count: number;
+  last_seen?: string | null;
+};
+
+export type AdminUsersPage = {
+  items: AdminUserRow[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type AdminRevenue = {
+  mrr_usd: number;
+  active_pro_count: number;
+  new_subs_30d: number;
+  churn_30d: number;
+};
+
+export type AdminDataHealthRow = {
+  source: string;
+  row_count: number;
+  last_ingested_at?: string | null;
+  status: "ok" | "stale" | "down";
+};
+
+export type AdminSystem = {
+  db_reachable: boolean;
+  redis_reachable: boolean;
+  qdrant_reachable: boolean;
+  api_version: string;
+  uptime_seconds: number;
+};
+
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-function devHeaders(): HeadersInit {
+type TokenGetter = () => Promise<string | null>;
+
+let _getToken: TokenGetter | null = null;
+
+/** Wire Clerk's `getToken` from a client provider (see `AuthBridge` in apps/web). */
+export function setAuthTokenGetter(fn: TokenGetter): void {
+  _getToken = fn;
+}
+
+async function authHeaders(): Promise<HeadersInit> {
+  if (_getToken) {
+    const token = await _getToken();
+    if (token) return { Authorization: `Bearer ${token}` };
+  }
+  // Local dev fallback only — backend ignores this when ENVIRONMENT=production.
   return { "X-Dev-User-Id": "dev-user" };
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${baseUrl}${path}`, {
     ...init,
-    headers: { ...devHeaders(), ...(init?.headers ?? {}) },
+    headers: { ...(await authHeaders()), ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -292,6 +363,66 @@ export async function getPortfolioSummary(): Promise<PortfolioSummaryOut> {
 
 export async function getAccount(): Promise<AccountOut> {
   return apiFetch<AccountOut>("/v1/account");
+}
+
+export async function getMe(): Promise<AccountOut> {
+  return apiFetch<AccountOut>("/v1/me");
+}
+
+export async function getAdminOverview(): Promise<AdminOverview> {
+  return apiFetch<AdminOverview>("/v1/admin/overview");
+}
+
+export async function getAdminUsers(params?: {
+  limit?: number;
+  offset?: number;
+  q?: string;
+}): Promise<AdminUsersPage> {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.q) search.set("q", params.q);
+  const qs = search.toString();
+  return apiFetch<AdminUsersPage>(`/v1/admin/users${qs ? `?${qs}` : ""}`);
+}
+
+export async function setUserRole(userId: string, role: string): Promise<{ role: string }> {
+  return apiFetch<{ role: string }>(`/v1/admin/users/${userId}/role`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function setUserAccountNumber(
+  userId: string,
+  accountNumber: string,
+): Promise<{ account_number: string }> {
+  return apiFetch<{ account_number: string }>(`/v1/admin/users/${userId}/account-number`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ account_number: accountNumber }),
+  });
+}
+
+export async function setUserTier(userId: string, tier: string): Promise<{ tier: string }> {
+  return apiFetch<{ tier: string }>(`/v1/admin/users/${userId}/tier`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tier }),
+  });
+}
+
+export async function getAdminRevenue(): Promise<AdminRevenue> {
+  return apiFetch<AdminRevenue>("/v1/admin/revenue");
+}
+
+export async function getAdminDataHealth(): Promise<AdminDataHealthRow[]> {
+  return apiFetch<AdminDataHealthRow[]>("/v1/admin/data-health");
+}
+
+export async function getAdminSystem(): Promise<AdminSystem> {
+  return apiFetch<AdminSystem>("/v1/admin/system");
 }
 
 export async function startCheckout(): Promise<{ url: string }> {
@@ -563,7 +694,7 @@ export async function getDigestPreview(): Promise<DigestPreview> {
 
 export async function exportPortfolioCsv(): Promise<Blob> {
   const res = await fetch(`${baseUrl}/v1/portfolio/export`, {
-    headers: devHeaders(),
+    headers: await authHeaders(),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

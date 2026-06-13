@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tcgscan_api.config import get_settings
 from tcgscan_api.db.models import (
     PortfolioItem,
     PriceAlert,
     SavedSearch,
     User,
+    UserRole,
     UserTier,
     WatchlistItem,
 )
@@ -19,20 +21,55 @@ class UsersRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def _next_account_seq(self) -> int:
+        bind = self._session.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            result = await self._session.execute(text("SELECT nextval('user_account_seq')"))
+            return int(result.scalar_one())
+        row = await self._session.execute(
+            text("SELECT COALESCE(MAX(account_seq), 9) + 1 FROM users")
+        )
+        return int(row.scalar_one())
+
+    async def _maybe_promote_owner(self, user: User) -> User:
+        settings = get_settings()
+        if (
+            settings.owner_email
+            and user.email
+            and user.email.lower() == settings.owner_email.lower()
+            and user.role != UserRole.owner
+        ):
+            user.role = UserRole.owner
+            await self._session.commit()
+            await self._session.refresh(user)
+        return user
+
     async def get_or_create(self, *, clerk_id: str, email: str | None = None) -> User:
         stmt = select(User).where(User.clerk_id == clerk_id)
         existing = (await self._session.execute(stmt)).scalar_one_or_none()
         if existing:
+            changed = False
             if email and not existing.email:
                 existing.email = email
+                changed = True
+            if changed:
                 await self._session.commit()
                 await self._session.refresh(existing)
-            return existing
-        user = User(clerk_id=clerk_id, email=email, tier=UserTier.free)
+            return await self._maybe_promote_owner(existing)
+
+        seq = await self._next_account_seq()
+        user = User(
+            clerk_id=clerk_id,
+            email=email,
+            tier=UserTier.free,
+            role=UserRole.user,
+            account_seq=seq,
+            account_number=f"{seq:06d}",
+        )
         self._session.add(user)
         await self._session.commit()
         await self._session.refresh(user)
-        return user
+        return await self._maybe_promote_owner(user)
 
     async def get_by_id(self, user_id: uuid.UUID) -> User | None:
         return await self._session.get(User, user_id)
@@ -51,6 +88,30 @@ class UsersRepo:
     async def set_tier(self, user_id: uuid.UUID, tier: UserTier) -> None:
         await self._session.execute(update(User).where(User.id == user_id).values(tier=tier))
         await self._session.commit()
+
+    async def set_role(self, user_id: uuid.UUID, role: UserRole) -> User | None:
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return None
+        user.role = role
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
+    async def set_account_number(self, user_id: uuid.UUID, account_number: str) -> User | None:
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return None
+        user.account_number = account_number
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
+    async def account_number_taken(self, account_number: str, *, exclude_id: uuid.UUID) -> bool:
+        stmt = select(User.id).where(
+            User.account_number == account_number, User.id != exclude_id
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
     async def set_comps_days(self, user_id: uuid.UUID, days: int) -> User | None:
         user = await self._session.get(User, user_id)

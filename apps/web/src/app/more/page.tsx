@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MoreAdminLink } from "@/components/more-admin-link";
 import { CurrencySelect } from "@/lib/currency";
 
 export const metadata: Metadata = {
@@ -48,6 +49,7 @@ export default function MorePage() {
         <CurrencySelect />
       </div>
       <ul className="mt-4 divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <MoreAdminLink />
         {ITEMS.map((item) => (
           <li key={item.label}>
             <Link

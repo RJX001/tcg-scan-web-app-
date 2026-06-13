@@ -10,6 +10,7 @@ from tcgscan_api.config import get_settings
 from tcgscan_api.errors import AppError
 from tcgscan_api.middleware.auth import AuthMiddleware
 from tcgscan_api.routes import (
+    admin,
     billing,
     cards,
     health,
@@ -76,3 +77,4 @@ app.include_router(insights.router, prefix="/v1")
 app.include_router(market.router, prefix="/v1")
 app.include_router(searches.router, prefix="/v1")
 app.include_router(watchlist.router, prefix="/v1")
+app.include_router(admin.router, prefix="/v1")

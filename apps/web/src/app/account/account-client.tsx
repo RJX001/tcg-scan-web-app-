@@ -56,6 +56,12 @@ export function AccountClient() {
           <CardTitle>Your plan</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          {account.account_number && (
+            <p>
+              Account{" "}
+              <span className="font-mono font-semibold">#{account.account_number}</span>
+            </p>
+          )}
           <p>
             Current tier:{" "}
             <span className="font-semibold uppercase">{account.tier}</span>
