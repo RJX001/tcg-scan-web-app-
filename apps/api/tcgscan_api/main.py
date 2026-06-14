@@ -43,6 +43,7 @@ _settings = get_settings()
 _cors_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
 
 app = FastAPI(title="TCG Chart API", version="0.0.0", lifespan=lifespan)
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -50,7 +51,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(AuthMiddleware)
 
 
 @app.exception_handler(AppError)
