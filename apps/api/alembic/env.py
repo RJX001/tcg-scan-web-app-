@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import create_engine, pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 from tcgscan_api.config import get_settings
@@ -16,7 +14,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+
+def get_sync_database_url() -> str:
+    url = get_settings().database_url
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    return url
+
+
+config.set_main_option("sqlalchemy.url", get_sync_database_url())
 target_metadata = Base.metadata
 
 
@@ -37,17 +43,12 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    connectable = create_async_engine(
+def run_migrations_online() -> None:
+    connectable = create_engine(
         config.get_main_option("sqlalchemy.url"), poolclass=pool.NullPool
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
 
 
 if context.is_offline_mode():
