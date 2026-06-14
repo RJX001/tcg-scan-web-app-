@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from "next";
 import {
   ClerkProvider,
   Show,
-  SignInButton,
   UserButton,
 } from "@clerk/nextjs";
 import { AdminNavLink } from "@/components/admin-nav-link";
@@ -96,17 +95,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </li>
                   <li>
                     <Show when="signed-out">
-                      <SignInButton mode="modal">
-                        <button
-                          type="button"
-                          className="rounded-full bg-blue-700 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
-                        >
-                          Sign in
-                        </button>
-                      </SignInButton>
+                      <Link
+                        href="/sign-in"
+                        className="rounded-full bg-blue-700 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
+                      >
+                        Sign in
+                      </Link>
                     </Show>
                     <Show when="signed-in">
-                      <UserButton />
+                      <UserButton afterSignOutUrl="/" />
                     </Show>
                   </li>
                 </ul>
@@ -120,14 +117,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="flex items-center gap-2">
                   <CurrencySelect />
                   <Show when="signed-out">
-                    <SignInButton mode="modal">
-                      <button type="button" className="text-sm font-semibold text-blue-700">
-                        Sign in
-                      </button>
-                    </SignInButton>
+                    <Link href="/sign-in" className="text-sm font-semibold text-blue-700">
+                      Sign in
+                    </Link>
                   </Show>
                   <Show when="signed-in">
-                    <UserButton />
+                    <UserButton afterSignOutUrl="/" />
                   </Show>
                   <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
