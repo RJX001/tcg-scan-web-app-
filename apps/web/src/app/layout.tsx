@@ -103,7 +103,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       </Link>
                     </Show>
                     <Show when="signed-in">
-                      <UserButton afterSignOutUrl="/" />
+                      <UserButton />
                     </Show>
                   </li>
                 </ul>
@@ -122,7 +122,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </Link>
                   </Show>
                   <Show when="signed-in">
-                    <UserButton afterSignOutUrl="/" />
+                    <UserButton />
                   </Show>
                   <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
