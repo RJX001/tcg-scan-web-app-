@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import CardIdentity
@@ -11,6 +11,8 @@ from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.sales import SalesRepo
 from tcgscan_api.services.market_region import infer_market_region
 from tcgscan_api.services.slug import card_slug_from_identity
+
+MIN_COMPS_FOR_PRICE = 5
 
 
 class CardOut(BaseModel):
@@ -21,8 +23,19 @@ class CardOut(BaseModel):
     set_code: str | None = None
     set_name: str | None = None
     number: str | None = None
+    card_number: str | None = None
     rarity: str | None = None
     image_urls: dict[str, object] | None = None
+    image_url: str | None = None
+    source: str | None = None
+    metadata: dict[str, object] | None = None
+    price_status: str = "pending"
+    current_value: float | None = None
+
+
+class CardDetailOut(CardOut):
+    listings: list["ListingOut"] = Field(default_factory=list)
+    listings_message: str | None = None
 
 
 class CompOut(BaseModel):
@@ -81,7 +94,23 @@ class SourcePrices(BaseModel):
     marketplaces: list[MarketplacePriceOut] = []
 
 
-def _to_out(card: CardIdentity) -> CardOut:
+def _image_url(card: CardIdentity) -> str | None:
+    urls = card.image_urls or {}
+    for key in ("large", "front", "small", "hires"):
+        value = urls.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+async def _price_fields(session: AsyncSession, card_id: uuid.UUID) -> tuple[str, float | None]:
+    summary = await get_comp_summary(session, card_id, days=30)
+    if summary.count >= MIN_COMPS_FOR_PRICE and summary.median_usd is not None:
+        return "available", summary.median_usd
+    return "pending", None
+
+
+def _to_out(card: CardIdentity, *, price_status: str = "pending", current_value: float | None = None) -> CardOut:
     return CardOut(
         id=str(card.id),
         slug=card_slug_from_identity(card),
@@ -90,8 +119,14 @@ def _to_out(card: CardIdentity) -> CardOut:
         set_code=card.set_code,
         set_name=card.set_name,
         number=card.number,
+        card_number=card.number,
         rarity=card.rarity,
         image_urls=card.image_urls,
+        image_url=_image_url(card),
+        source=card.source,
+        metadata=card.attributes,
+        price_status=price_status,
+        current_value=current_value,
     )
 
 
@@ -99,14 +134,29 @@ async def get_card(session: AsyncSession, card_id: uuid.UUID) -> CardOut:
     card = await CardsRepo(session).get(card_id)
     if card is None:
         raise NotFoundError(f"card not found: {card_id}")
-    return _to_out(card)
+    price_status, current_value = await _price_fields(session, card_id)
+    return _to_out(card, price_status=price_status, current_value=current_value)
+
+
+async def get_card_detail(session: AsyncSession, card_id: uuid.UUID) -> CardDetailOut:
+    card = await CardsRepo(session).get(card_id)
+    if card is None:
+        raise NotFoundError(f"card not found: {card_id}")
+    price_status, current_value = await _price_fields(session, card_id)
+    listings = await get_listings(session, card_id, limit=20)
+    listings_message = None
+    if not listings:
+        listings_message = "Live listings pending marketplace source approval."
+    base = _to_out(card, price_status=price_status, current_value=current_value)
+    return CardDetailOut(**base.model_dump(), listings=listings, listings_message=listings_message)
 
 
 async def get_card_by_slug(session: AsyncSession, slug: str) -> CardOut:
     card = await CardsRepo(session).get_by_slug(slug)
     if card is None:
         raise NotFoundError(f"card not found: {slug}")
-    return _to_out(card)
+    price_status, current_value = await _price_fields(session, card.id)
+    return _to_out(card, price_status=price_status, current_value=current_value)
 
 
 async def get_comps(
@@ -163,12 +213,28 @@ async def get_comp_summary(
 
 
 async def search_cards(
-    session: AsyncSession, *, q: str, game: str | None = None, limit: int = 20
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    game: str | None = None,
+    set_code: str | None = None,
+    rarity: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
 ) -> list[CardOut]:
-    if not q.strip():
-        return []
-    rows = await CardsRepo(session).search(q=q, game=game, limit=limit)
-    return [_to_out(c) for c in rows]
+    rows = await CardsRepo(session).search(
+        q=q,
+        game=game,
+        set_code=set_code,
+        rarity=rarity,
+        limit=limit,
+        offset=offset,
+    )
+    results: list[CardOut] = []
+    for card in rows:
+        price_status, current_value = await _price_fields(session, card.id)
+        results.append(_to_out(card, price_status=price_status, current_value=current_value))
+    return results
 
 
 async def get_chart(
@@ -184,7 +250,6 @@ async def get_chart(
             )
             for r in rows
         ]
-    # Fallback: aggregate comps by day when rollups not yet computed
     comp_rows = await SalesRepo(session).comps_for_card(card_id, days=days)
     by_day: dict[str, list[float]] = {}
     for r in comp_rows:

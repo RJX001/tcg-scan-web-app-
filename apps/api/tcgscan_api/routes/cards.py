@@ -13,6 +13,7 @@ from tcgscan_api.repositories.users import UsersRepo
 from tcgscan_api.services.auth_ctx import is_pro, optional_db_user
 from tcgscan_api.services.billing import ALLOWED_COMPS_DAYS
 from tcgscan_api.services.cards import (
+    CardDetailOut,
     CardOut,
     ChartPoint,
     CompOut,
@@ -22,6 +23,7 @@ from tcgscan_api.services.cards import (
     SourcePrices,
     get_card,
     get_card_by_slug,
+    get_card_detail,
     get_chart,
     get_comp_summary,
     get_comp_summary_by_grade,
@@ -39,13 +41,26 @@ router = APIRouter(prefix="/cards", tags=["cards"])
 @router.get("/search", response_model=list[CardOut])
 async def card_search(
     request: Request,
-    q: str = Query(min_length=1),
+    q: str | None = Query(default=None),
     game: str | None = None,
+    set: str | None = Query(default=None, alias="set"),
+    rarity: str | None = None,
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[CardOut]:
     await check_ip_rate_limit(request, prefix="search_rate", limit=120)
-    return await search_cards(session, q=q, game=game, limit=limit)
+    if not (q or game or set or rarity):
+        return []
+    return await search_cards(
+        session,
+        q=q,
+        game=game,
+        set_code=set,
+        rarity=rarity,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/slug/{slug}", response_model=CardOut)
@@ -62,14 +77,14 @@ async def card_by_slug(slug: str, session: AsyncSession = Depends(get_session)) 
     return out
 
 
-@router.get("/{card_id}", response_model=CardOut)
-async def card_detail(card_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> CardOut:
-    key = f"cards:{card_id}"
+@router.get("/{card_id}", response_model=CardDetailOut)
+async def card_detail(card_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> CardDetailOut:
+    key = f"cards:detail:{card_id}"
     cached = await cache_get(key)
     if cached:
-        return CardOut.model_validate(cached)
+        return CardDetailOut.model_validate(cached)
     try:
-        out = await get_card(session, card_id)
+        out = await get_card_detail(session, card_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=exc.message) from exc
     await cache_set(key, out.model_dump(mode="json"), ttl_s=900)

@@ -28,6 +28,8 @@ class Game(str, enum.Enum):
     mtg = "mtg"
     yugioh = "yugioh"
     one_piece = "one_piece"
+    dragon_ball_fusion_world = "dragon_ball_fusion_world"
+    dragon_ball_masters = "dragon_ball_masters"
     lorcana = "lorcana"
     star_wars_unlimited = "star_wars_unlimited"
     flesh_and_blood = "flesh_and_blood"
@@ -37,6 +39,13 @@ class Game(str, enum.Enum):
     sports_football = "sports_football"
     sports_soccer = "sports_soccer"
     other = "other"
+
+
+class SourceRunStatus(str, enum.Enum):
+    started = "started"
+    success = "success"
+    failed = "failed"
+    partial = "partial"
 
 
 class SaleKind(str, enum.Enum):
@@ -60,6 +69,8 @@ class CardIdentity(Base):
     attributes: Mapped[dict[str, object] | None] = mapped_column(JSON, default=dict)
     image_urls: Mapped[dict[str, object] | None] = mapped_column(JSON, default=dict)
     external_ids: Mapped[dict[str, object] | None] = mapped_column(JSON, default=dict)
+    source: Mapped[str | None] = mapped_column(String(64), index=True)
+    source_card_id: Mapped[str | None] = mapped_column(String(128), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -74,7 +85,29 @@ class CardIdentity(Base):
 
     __table_args__ = (
         UniqueConstraint("game", "set_code", "number", name="uq_card_game_set_number"),
+        UniqueConstraint("game", "source", "source_card_id", name="uq_card_game_source_id"),
     )
+
+
+class SourceRun(Base):
+    __tablename__ = "source_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[SourceRunStatus] = mapped_column(
+        Enum(SourceRunStatus, name="source_run_status", native_enum=False),
+        nullable=False,
+    )
+    inserted_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(String(1024))
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    dry_run: Mapped[bool] = mapped_column(default=False)
 
 
 class SaleEvent(Base):

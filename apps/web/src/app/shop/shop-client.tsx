@@ -292,8 +292,11 @@ export function ShopClient() {
         })}
         {!loading && rows.length === 0 && !error && (
           <li className="px-4 py-10 text-center text-sm text-zinc-500">
-            No listings match. Try clearing filters, or run{" "}
-            <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code> for demo data.
+            Live marketplace listings are pending eBay/Cardmarket approval. You can still search the{" "}
+            <Link href="/cards" className="font-medium text-blue-700 hover:underline">
+              card catalogue
+            </Link>
+            .
           </li>
         )}
       </ul>

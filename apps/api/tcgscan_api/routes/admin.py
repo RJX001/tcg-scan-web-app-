@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.cache import get_redis
 from tcgscan_api.services.qdrant import get_qdrant
 from tcgscan_api.services.roles import require_admin, require_owner, require_senior
+from tcgscan_api.services.catalogue_ingest import catalogue_stats, run_catalogue_ingest
 from tcgscan_api.services.source_audit import (
     build_sources_status,
     test_cardmarket_connection,
@@ -182,7 +183,90 @@ async def admin_sources_status(
 ) -> dict[str, Any]:
     await _admin_user(request, session)
     data_health = await AdminRepo(session).data_health()
-    return build_sources_status(data_health)
+    payload = build_sources_status(data_health)
+    payload.update(await catalogue_stats(session))
+    return payload
+
+
+async def _run_ingest(
+    request: Request,
+    session: AsyncSession,
+    source_key: str,
+    *,
+    limit: int,
+    dry_run: bool,
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    result = await run_catalogue_ingest(session, source_key, limit=limit, dry_run=dry_run)
+    return {
+        "source_run_id": result.source_run_id,
+        "status": result.status,
+        "inserted_count": result.inserted_count,
+        "updated_count": result.updated_count,
+        "skipped_count": result.skipped_count,
+        "message": result.message,
+        "dry_run": result.dry_run,
+    }
+
+
+@router.post("/sources/ingest/pokemon")
+async def admin_ingest_pokemon(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=5000),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_ingest(request, session, "pokemon", limit=limit, dry_run=dry_run)
+
+
+@router.post("/sources/ingest/scryfall")
+async def admin_ingest_scryfall(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=5000),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_ingest(request, session, "scryfall", limit=limit, dry_run=dry_run)
+
+
+@router.post("/sources/ingest/ygopro")
+async def admin_ingest_ygopro(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=5000),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_ingest(request, session, "ygopro", limit=limit, dry_run=dry_run)
+
+
+@router.post("/sources/ingest/one-piece")
+async def admin_ingest_one_piece(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=5000),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_ingest(request, session, "one_piece", limit=limit, dry_run=dry_run)
+
+
+@router.post("/sources/ingest/dragon-ball-fusion-world")
+async def admin_ingest_dragon_ball_fw(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=5000),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_ingest(request, session, "dragon_ball_fusion_world", limit=limit, dry_run=dry_run)
+
+
+@router.post("/sources/ingest/dragon-ball-masters")
+async def admin_ingest_dragon_ball_masters(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=100, ge=1, le=5000),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_ingest(request, session, "dragon_ball_masters", limit=limit, dry_run=dry_run)
 
 
 @router.get("/sources/test/ebay")

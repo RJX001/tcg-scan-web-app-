@@ -1,8 +1,8 @@
 "use client";
 
 import { Button, Card, CardContent } from "@tcgscan/ui";
-import type { AdminSourceDiagnostic, AdminSourcesStatus, AccountOut } from "@tcgscan/sdk-ts";
-import { getAdminSourceTest, getAdminSourcesStatus, getMe } from "@tcgscan/sdk-ts";
+import type { AdminIngestResult, AdminSourceDiagnostic, AdminSourcesStatus, AccountOut } from "@tcgscan/sdk-ts";
+import { getAdminSourceTest, getAdminSourcesStatus, getMe, postAdminSourceIngest } from "@tcgscan/sdk-ts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
@@ -14,19 +14,21 @@ type SourceRow = {
   label: string;
   provider: string;
   testSlug: string;
+  ingestSlug?: string;
   group: "catalog" | "pricing" | "trends";
 };
 
 const SOURCE_ROWS: SourceRow[] = [
-  { id: "pokemon", label: "Pokémon", provider: "pokemontcg.io", testSlug: "pokemon", group: "catalog" },
-  { id: "scryfall", label: "MTG / Scryfall", provider: "Scryfall", testSlug: "scryfall", group: "catalog" },
-  { id: "yugioh", label: "Yu-Gi-Oh / YGOPRODeck", provider: "YGOPRODeck", testSlug: "ygopro", group: "catalog" },
-  { id: "one_piece", label: "One Piece / OPTCG API", provider: "optcgapi", testSlug: "one-piece", group: "catalog" },
+  { id: "pokemon", label: "Pokémon", provider: "pokemontcg.io", testSlug: "pokemon", ingestSlug: "pokemon", group: "catalog" },
+  { id: "scryfall", label: "MTG / Scryfall", provider: "Scryfall", testSlug: "scryfall", ingestSlug: "scryfall", group: "catalog" },
+  { id: "yugioh", label: "Yu-Gi-Oh / YGOPRODeck", provider: "YGOPRODeck", testSlug: "ygopro", ingestSlug: "ygopro", group: "catalog" },
+  { id: "one_piece", label: "One Piece / OPTCG API", provider: "optcgapi", testSlug: "one-piece", ingestSlug: "one-piece", group: "catalog" },
   {
     id: "dragon_ball_fw",
     label: "Dragon Ball Fusion World / Bandai",
     provider: "bandai_fusion_world",
     testSlug: "dragon-ball-fusion-world",
+    ingestSlug: "dragon-ball-fusion-world",
     group: "catalog",
   },
   {
@@ -34,6 +36,7 @@ const SOURCE_ROWS: SourceRow[] = [
     label: "Dragon Ball Masters / Bandai",
     provider: "bandai_masters",
     testSlug: "dragon-ball-masters",
+    ingestSlug: "dragon-ball-masters",
     group: "catalog",
   },
   { id: "ebay", label: "eBay", provider: "eBay Browse", testSlug: "ebay", group: "pricing" },
@@ -77,7 +80,43 @@ export function AdminSourcesClient() {
   const [statusPayload, setStatusPayload] = useState<AdminSourcesStatus | null>(null);
   const [diagnostics, setDiagnostics] = useState<Record<string, AdminSourceDiagnostic>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [ingestingId, setIngestingId] = useState<string | null>(null);
+  const [ingestResults, setIngestResults] = useState<Record<string, AdminIngestResult>>({});
   const [error, setError] = useState<string | null>(null);
+
+  const statsByKey = useMemo(() => {
+    const map = new Map<string, NonNullable<AdminSourcesStatus["catalog_stats"]>[number]>();
+    for (const row of statusPayload?.catalog_stats ?? []) {
+      map.set(row.source_key, row);
+    }
+    return map;
+  }, [statusPayload]);
+
+  const catalogMetaId = (row: SourceRow) =>
+    row.id === "scryfall"
+      ? "mtg"
+      : row.id === "yugioh"
+        ? "yugioh"
+        : row.id === "one_piece"
+          ? "one_piece"
+          : row.id === "dragon_ball_fw"
+            ? "dragon_ball_fusion_world"
+            : row.id === "dragon_ball_masters"
+              ? "dragon_ball_masters"
+              : row.id;
+
+  const ingestSourceKey = (row: SourceRow) =>
+    row.id === "scryfall"
+      ? "scryfall"
+      : row.id === "yugioh"
+        ? "ygopro"
+        : row.id === "one_piece"
+          ? "one_piece"
+          : row.id === "dragon_ball_fw"
+            ? "dragon_ball_fusion_world"
+            : row.id === "dragon_ball_masters"
+              ? "dragon_ball_masters"
+              : row.id;
 
   const catalogById = useMemo(() => {
     const map = new Map<string, AdminSourcesStatus["catalog_sources"][number]>();
@@ -151,21 +190,24 @@ export function AdminSourcesClient() {
     }
   }
 
+  async function runIngest(row: SourceRow) {
+    if (!row.ingestSlug) return;
+    setIngestingId(row.id);
+    setError(null);
+    try {
+      const result = await postAdminSourceIngest(row.ingestSlug, { limit: 100 });
+      setIngestResults((prev) => ({ ...prev, [row.id]: result }));
+      setStatusPayload(await getAdminSourcesStatus());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ingest failed");
+    } finally {
+      setIngestingId(null);
+    }
+  }
+
   function configuredStatus(row: SourceRow): DiagnosticStatus | "idle" {
     if (row.group === "catalog") {
-      const meta = catalogById.get(
-        row.id === "scryfall"
-          ? "mtg"
-          : row.id === "yugioh"
-            ? "yugioh"
-            : row.id === "one_piece"
-              ? "one_piece"
-              : row.id === "dragon_ball_fw"
-                ? "dragon_ball_fusion_world"
-                : row.id === "dragon_ball_masters"
-                  ? "dragon_ball_masters"
-                  : row.id,
-      );
+      const meta = catalogById.get(catalogMetaId(row));
       if (!meta) return "idle";
       if (!meta.configured) return "missing_env";
       return mapImplementationStatus(meta.implementation);
@@ -211,26 +253,47 @@ export function AdminSourcesClient() {
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <Card>
+        <CardContent className="pt-6">
+          <p className="text-sm text-amber-800">
+            Full catalogue imports should run as background jobs. Use &quot;Ingest sample&quot; (limit 100)
+            for safe testing only.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="overflow-x-auto pt-6">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr className="border-b text-xs uppercase text-zinc-500">
                 <th className="pb-2 pr-4">Source</th>
+                <th className="pb-2 pr-4">Cards</th>
+                <th className="pb-2 pr-4">Last ingest</th>
                 <th className="pb-2 pr-4">Config</th>
                 <th className="pb-2 pr-4">Live test</th>
                 <th className="pb-2 pr-4">Message</th>
-                <th className="pb-2">Action</th>
+                <th className="pb-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {SOURCE_ROWS.map((row) => {
                 const diag = diagnostics[row.id];
+                const ingest = ingestResults[row.id];
                 const configStatus = configuredStatus(row);
+                const stat = statsByKey.get(ingestSourceKey(row));
                 return (
                   <tr key={row.id} className="border-b border-zinc-100 align-top">
                     <td className="py-3 pr-4">
                       <p className="font-medium">{row.label}</p>
                       <p className="text-xs text-zinc-500">{row.provider}</p>
+                    </td>
+                    <td className="py-3 pr-4 tabular-nums">
+                      {stat?.card_count != null ? stat.card_count.toLocaleString() : "—"}
+                    </td>
+                    <td className="py-3 pr-4 text-xs text-zinc-600">
+                      {stat?.last_success_at
+                        ? new Date(stat.last_success_at).toLocaleString()
+                        : "Never"}
                     </td>
                     <td className="py-3 pr-4">{statusBadge(configStatus)}</td>
                     <td className="py-3 pr-4">
@@ -249,20 +312,38 @@ export function AdminSourcesClient() {
                           {diag.set_count != null ? (
                             <p className="text-xs">Sets: {diag.set_count}</p>
                           ) : null}
+                          {ingest ? (
+                            <p className="text-xs text-emerald-700">
+                              Ingest: +{ingest.inserted_count} / ~{ingest.updated_count} updated ·{" "}
+                              {ingest.message}
+                            </p>
+                          ) : null}
                         </div>
                       ) : (
                         <span className="text-xs text-zinc-400">Run test to probe live connectivity</span>
                       )}
                     </td>
                     <td className="py-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={testingId === row.id}
-                        onClick={() => void runTest(row)}
-                      >
-                        {testingId === row.id ? "Testing…" : "Test"}
-                      </Button>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={testingId === row.id}
+                          onClick={() => void runTest(row)}
+                        >
+                          {testingId === row.id ? "Testing…" : "Test"}
+                        </Button>
+                        {row.ingestSlug ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={ingestingId === row.id}
+                            onClick={() => void runIngest(row)}
+                          >
+                            {ingestingId === row.id ? "Ingesting…" : "Ingest sample"}
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );

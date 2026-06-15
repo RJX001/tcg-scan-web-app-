@@ -126,10 +126,22 @@ export default async function CardDetailPage({ params }: Props) {
           </p>
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <PriceTile label="30d median" value={<Money usd={summary.median_usd} />} />
-            <PriceTile label="30d mean" value={<Money usd={summary.mean_usd} />} />
-            <PriceTile label="30d low" value={<Money usd={summary.min_usd} />} />
-            <PriceTile label="30d high" value={<Money usd={summary.max_usd} />} />
+            {card.price_status === "available" && summary.count >= 5 ? (
+              <>
+                <PriceTile label="30d median" value={<Money usd={summary.median_usd} />} />
+                <PriceTile label="30d mean" value={<Money usd={summary.mean_usd} />} />
+                <PriceTile label="30d low" value={<Money usd={summary.min_usd} />} />
+                <PriceTile label="30d high" value={<Money usd={summary.max_usd} />} />
+              </>
+            ) : (
+              <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:col-span-4">
+                <p className="text-sm font-medium text-amber-900">Live pricing unavailable</p>
+                <p className="mt-1 text-sm text-amber-800">
+                  Marketplace pricing is pending eBay/Cardmarket approval. Catalogue metadata is
+                  available; sold comps and listings will appear once marketplace sources are connected.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="mt-4">
@@ -201,7 +213,13 @@ export default async function CardDetailPage({ params }: Props) {
           <CardTitle>Active listings</CardTitle>
         </CardHeader>
         <CardContent>
-          <ListingsTable listings={listings} />
+          {listings.length === 0 ? (
+            <p className="text-sm text-zinc-600">
+              Live listings pending marketplace source approval.
+            </p>
+          ) : (
+            <ListingsTable listings={listings} />
+          )}
         </CardContent>
       </Card>
 

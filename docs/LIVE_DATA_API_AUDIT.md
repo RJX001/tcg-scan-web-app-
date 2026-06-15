@@ -353,7 +353,28 @@ Register schedules: `pnpm worker schedules:register` (requires Temporal + approv
 
 ---
 
-## Verification commands
+## Catalogue search (semi-functional)
+
+The site now supports **catalogue search** without eBay:
+
+| Route | Purpose |
+|-------|---------|
+| `GET /v1/cards/search` | Search `card_identity` by name/set/game; returns `price_status=pending` when no comps |
+| `GET /v1/cards/{id}` | Full card detail + `listings_message` when marketplace listings absent |
+| `POST /v1/admin/sources/ingest/*` | Admin sample ingest (limit 100 default) into `card_identity` |
+| `/cards` (web) | Public catalogue search UI |
+
+**Schema:** `card_identity` extended with `source`, `source_card_id`, unique `(game, source, source_card_id)`. New `source_runs` table tracks ingest status.
+
+**Pricing rule:** Catalogue metadata APIs do **not** provide live marketplace prices. `current_value` is only set when ≥5 sold comps exist in `sale_event`. Otherwise `price_status=pending`.
+
+**eBay:** Still pending approval — do not depend on eBay for catalogue or pricing.
+
+**Marketplace listings:** `/shop` shows pending-approval empty state; live listings require eBay/Cardmarket ingest later.
+
+**Next steps:** Background full ingest jobs, portfolio valuations from comps, live pricing once marketplace sources approved.
+
+---
 
 ```bash
 # Admin status (requires admin Bearer token)

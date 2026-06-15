@@ -60,8 +60,19 @@ export type CardOut = {
   set_code?: string | null;
   set_name?: string | null;
   number?: string | null;
+  card_number?: string | null;
   rarity?: string | null;
   image_urls?: Record<string, unknown> | null;
+  image_url?: string | null;
+  source?: string | null;
+  metadata?: Record<string, unknown> | null;
+  price_status?: "pending" | "available" | string;
+  current_value?: number | null;
+};
+
+export type CardDetailOut = CardOut & {
+  listings?: ListingOut[];
+  listings_message?: string | null;
 };
 
 export type CompOut = {
@@ -264,8 +275,27 @@ export type AdminSourcesStatus = {
   };
   pricing_sources: AdminPricingSourceStatus[];
   catalog_sources: AdminCatalogSourceStatus[];
+  catalog_stats?: AdminCatalogStat[];
   vercel_env_required: string[];
   worker_service_required: boolean;
+};
+
+export type AdminCatalogStat = {
+  source_key: string;
+  catalog_source: string;
+  card_count: number;
+  last_success_at?: string | null;
+  last_run_id?: string | null;
+};
+
+export type AdminIngestResult = {
+  source_run_id: string;
+  status: string;
+  inserted_count: number;
+  updated_count: number;
+  skipped_count: number;
+  message: string;
+  dry_run: boolean;
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -321,16 +351,33 @@ export async function scanCard(
 
 export async function searchCards(
   q: string,
-  opts?: { game?: string; limit?: number },
+  opts?: { game?: string; set?: string; rarity?: string; limit?: number; offset?: number },
 ): Promise<CardOut[]> {
   const params = new URLSearchParams({ q });
   if (opts?.game) params.set("game", opts.game);
+  if (opts?.set) params.set("set", opts.set);
+  if (opts?.rarity) params.set("rarity", opts.rarity);
   if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
   return apiFetch<CardOut[]>(`/v1/cards/search?${params}`);
 }
 
-export async function getCard(cardId: string): Promise<CardOut> {
-  return apiFetch<CardOut>(`/v1/cards/${cardId}`);
+export async function searchCatalog(
+  opts?: { q?: string; game?: string; set?: string; rarity?: string; limit?: number; offset?: number },
+): Promise<CardOut[]> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.game) params.set("game", opts.game);
+  if (opts?.set) params.set("set", opts.set);
+  if (opts?.rarity) params.set("rarity", opts.rarity);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  return apiFetch<CardOut[]>(`/v1/cards/search${qs ? `?${qs}` : ""}`);
+}
+
+export async function getCard(cardId: string): Promise<CardDetailOut> {
+  return apiFetch<CardDetailOut>(`/v1/cards/${cardId}`);
 }
 
 export async function getCardBySlug(slug: string): Promise<CardOut> {
@@ -496,6 +543,19 @@ export async function getAdminSourcesStatus(): Promise<AdminSourcesStatus> {
 
 export async function getAdminSourceTest(slug: string): Promise<AdminSourceDiagnostic> {
   return apiFetch<AdminSourceDiagnostic>(`/v1/admin/sources/test/${slug}`);
+}
+
+export async function postAdminSourceIngest(
+  slug: string,
+  opts?: { limit?: number; dryRun?: boolean },
+): Promise<AdminIngestResult> {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.dryRun) params.set("dry_run", "true");
+  const qs = params.toString();
+  return apiFetch<AdminIngestResult>(`/v1/admin/sources/ingest/${slug}${qs ? `?${qs}` : ""}`, {
+    method: "POST",
+  });
 }
 
 export async function startCheckout(): Promise<{ url: string }> {
