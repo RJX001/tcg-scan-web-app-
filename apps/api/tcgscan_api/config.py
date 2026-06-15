@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -14,7 +14,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(_ENV_FILE), extra="ignore")
 
     environment: str = Field(default="development", alias="ENVIRONMENT")
-    cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
+    cors_origins: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices(
+            "CORS_ORIGINS",
+            "BACKEND_CORS_ORIGINS",
+            "ALLOWED_ORIGINS",
+            "cors_origins",
+        ),
+    )
 
     database_url: str = Field(
         default="postgresql+asyncpg://tcgscan:tcgscan@localhost:5432/tcgscan",

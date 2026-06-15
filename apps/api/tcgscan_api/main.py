@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from tcgscan_api.config import get_settings
+from tcgscan_api.cors import CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS, parse_cors_origins
 from tcgscan_api.errors import AppError
 from tcgscan_api.middleware.auth import AuthMiddleware
 from tcgscan_api.routes import (
@@ -27,10 +28,17 @@ from tcgscan_api.telemetry import init_observability
 log = structlog.get_logger()
 
 
+def _cors_origins_from_settings() -> list[str]:
+    settings = get_settings()
+    return parse_cors_origins(settings.cors_origins)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_observability()
     settings = get_settings()
+    cors_origins = _cors_origins_from_settings()
+    log.info("Allowed CORS origins: %s", cors_origins)
     if settings.environment == "production" and not (
         settings.supabase_jwt_secret or settings.supabase_jwks_url
     ):
@@ -41,18 +49,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-_settings = get_settings()
-_cors_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
-
 app = FastAPI(title="TCG Chart API", version="0.0.0", lifespan=lifespan)
-app.add_middleware(AuthMiddleware)
+
+# CORSMiddleware must be registered before auth so preflight/401 responses include CORS headers.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=_cors_origins_from_settings(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=CORS_ALLOW_METHODS,
+    allow_headers=CORS_ALLOW_HEADERS,
 )
+app.add_middleware(AuthMiddleware)
 
 
 @app.exception_handler(AppError)
