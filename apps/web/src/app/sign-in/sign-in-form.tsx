@@ -33,8 +33,8 @@ export function SignInForm() {
         return;
       }
 
-      router.push(redirectedFrom);
       router.refresh();
+      router.push(redirectedFrom);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {

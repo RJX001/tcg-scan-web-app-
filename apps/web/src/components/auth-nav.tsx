@@ -5,21 +5,21 @@ import { useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
 
-function useAuthSignedIn() {
-  const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+function useHasSession() {
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
 
   useEffect(() => {
     let mounted = true;
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setIsSignedIn(Boolean(data.user));
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) setHasSession(Boolean(session?.access_token));
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsSignedIn(Boolean(session?.user));
+      setHasSession(Boolean(session?.access_token));
     });
 
     return () => {
@@ -28,13 +28,17 @@ function useAuthSignedIn() {
     };
   }, []);
 
-  return isSignedIn;
+  return hasSession;
 }
 
 export function AuthNavDesktop() {
-  const isSignedIn = useAuthSignedIn();
+  const hasSession = useHasSession();
 
-  if (isSignedIn) {
+  if (hasSession === null) {
+    return <span className="inline-block h-8 w-28" aria-hidden />;
+  }
+
+  if (hasSession) {
     return (
       <div className="flex items-center gap-3">
         <Link
@@ -61,16 +65,20 @@ export function AuthNavDesktop() {
 }
 
 export function AuthNavMobile() {
-  const isSignedIn = useAuthSignedIn();
+  const hasSession = useHasSession();
 
-  if (isSignedIn) {
+  if (hasSession === null) {
+    return <span className="inline-block h-4 w-16" aria-hidden />;
+  }
+
+  if (hasSession) {
     return (
       <div className="flex items-center gap-3">
         <Link href="/portfolio" className="text-sm font-semibold text-blue-700">
           Account
         </Link>
         <Link href="/sign-out" className="text-sm font-medium text-zinc-600">
-          Out
+          Sign out
         </Link>
       </div>
     );
