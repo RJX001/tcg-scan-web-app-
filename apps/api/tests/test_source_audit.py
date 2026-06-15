@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+
+from tcgscan_api.db.models import UserRole
+from tcgscan_api.db.session import get_session
+from tcgscan_api.main import app, fastapi_app
+from tcgscan_api.middleware.auth import AuthUser
+from tests.test_admin import _make_user, _patch_auth
+
+
+@pytest_asyncio.fixture
+async def api_client(sqlite_session: object) -> AsyncIterator[AsyncClient]:
+    async def override_session() -> AsyncIterator[object]:
+        yield sqlite_session
+
+    fastapi_app.dependency_overrides[get_session] = override_session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+    fastapi_app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_sources_status_forbidden_for_user(
+    api_client: AsyncClient,
+    sqlite_session: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
+    _patch_auth(
+        monkeypatch,
+        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "plain-user", tier="free", role="user"),
+    )
+    r = await api_client.get("/v1/admin/sources/status", headers={"X-Dev-User-Id": "plain-user"})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sources_status_ok_for_admin(
+    api_client: AsyncClient,
+    sqlite_session: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
+    _patch_auth(
+        monkeypatch,
+        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+    )
+    r = await api_client.get("/v1/admin/sources/status", headers={"X-Dev-User-Id": "admin-user"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "pricing_sources" in body
+    assert "catalog_sources" in body
+    assert body["architecture"]["background_jobs"] == "Temporal workflows (not Celery)"
+
+
+@pytest.mark.asyncio
+async def test_sources_test_reddit_not_implemented(
+    api_client: AsyncClient,
+    sqlite_session: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
+    _patch_auth(
+        monkeypatch,
+        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+    )
+    r = await api_client.get("/v1/admin/sources/test/reddit", headers={"X-Dev-User-Id": "admin-user"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False
+    assert body["implementation"] == "missing"

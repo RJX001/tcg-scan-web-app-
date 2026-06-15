@@ -20,6 +20,16 @@ from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.cache import get_redis
 from tcgscan_api.services.qdrant import get_qdrant
 from tcgscan_api.services.roles import require_admin, require_owner, require_senior
+from tcgscan_api.services.source_audit import (
+    build_sources_status,
+    test_cardmarket_connection,
+    test_ebay_connection,
+    test_one_piece_connection,
+    test_pokemon_connection,
+    test_reddit_connection,
+    test_scryfall_connection,
+    test_ygopro_connection,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -161,6 +171,79 @@ async def admin_data_health(
 ) -> list[dict[str, Any]]:
     await _admin_user(request, session)
     return await AdminRepo(session).data_health()
+
+
+@router.get("/sources/status")
+async def admin_sources_status(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    data_health = await AdminRepo(session).data_health()
+    return build_sources_status(data_health)
+
+
+@router.get("/sources/test/ebay")
+async def admin_test_ebay(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_ebay_connection()
+
+
+@router.get("/sources/test/pokemon")
+async def admin_test_pokemon(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_pokemon_connection()
+
+
+@router.get("/sources/test/scryfall")
+async def admin_test_scryfall(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_scryfall_connection()
+
+
+@router.get("/sources/test/ygopro")
+async def admin_test_ygopro(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_ygopro_connection()
+
+
+@router.get("/sources/test/one-piece")
+async def admin_test_one_piece(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_one_piece_connection()
+
+
+@router.get("/sources/test/reddit")
+async def admin_test_reddit(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_reddit_connection()
+
+
+@router.get("/sources/test/cardmarket")
+async def admin_test_cardmarket(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_cardmarket_connection()
 
 
 @router.get("/system")
