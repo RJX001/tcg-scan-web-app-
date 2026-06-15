@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import Link from "next/link";
 

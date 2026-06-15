@@ -12,6 +12,7 @@ import { DevBanner } from "@/components/dev-banner";
 import { PwaRegister } from "@/components/pwa-register";
 import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
 import "./globals.css";
+export { dynamic } from "./layout-config";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -62,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-zinc-50 text-zinc-900 antialiased">
-        <ClerkProvider>
+        <ClerkProvider signInFallbackRedirectUrl="/portfolio" signUpFallbackRedirectUrl="/portfolio">
           <CurrencyProvider>
             <PwaRegister />
             <AuthBridge />
