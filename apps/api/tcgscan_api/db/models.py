@@ -164,7 +164,12 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    clerk_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    clerk_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, nullable=True, index=True
+    )
+    supabase_user_id: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True
+    )
     email: Mapped[str | None] = mapped_column(String(255))
     tier: Mapped[UserTier] = mapped_column(
         Enum(UserTier, name="user_tier", native_enum=False), nullable=False, default=UserTier.free
@@ -176,9 +181,7 @@ class User(Base):
         server_default="user",
     )
     account_seq: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
-    account_number: Mapped[str] = mapped_column(
-        String(16), unique=True, nullable=False, index=True
-    )
+    account_number: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
     comps_days: Mapped[int] = mapped_column(
         Integer, nullable=False, default=30, server_default="30"

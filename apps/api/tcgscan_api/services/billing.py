@@ -97,11 +97,17 @@ async def create_checkout_session(session: AsyncSession, auth: AuthUser) -> Chec
     if not settings.stripe_pro_price_id:
         raise AppError("STRIPE_PRO_PRICE_ID not configured", status_code=503)
     stripe = _stripe()
-    user_row = await UsersRepo(session).get_or_create(clerk_id=auth.clerk_id, email=auth.email)
+    user_row = await UsersRepo(session).get_by_id(auth.id)
+    if user_row is None:
+        raise AppError("User not found", status_code=404)
     customer_id = user_row.stripe_customer_id
     if not customer_id:
         customer = stripe.Customer.create(
-            metadata={"clerk_id": auth.clerk_id, "user_id": str(user_row.id)},
+            metadata={
+                "clerk_id": auth.clerk_id or "",
+                "supabase_user_id": auth.supabase_user_id or "",
+                "user_id": str(user_row.id),
+            },
             email=user_row.email,
         )
         customer_id = customer.id
@@ -122,7 +128,9 @@ async def create_checkout_session(session: AsyncSession, auth: AuthUser) -> Chec
 
 async def create_portal_session(session: AsyncSession, auth: AuthUser) -> CheckoutOut:
     stripe = _stripe()
-    user_row = await UsersRepo(session).get_or_create(clerk_id=auth.clerk_id, email=auth.email)
+    user_row = await UsersRepo(session).get_by_id(auth.id)
+    if user_row is None:
+        raise AppError("User not found", status_code=404)
     if not user_row.stripe_customer_id:
         raise AppError("No billing account — subscribe first", status_code=400)
     portal = stripe.billing_portal.Session.create(

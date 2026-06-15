@@ -31,10 +31,12 @@ log = structlog.get_logger()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_observability()
     settings = get_settings()
-    if settings.environment == "production" and not settings.clerk_secret_key:
+    if settings.environment == "production" and not (
+        settings.supabase_jwt_secret or settings.supabase_jwks_url
+    ):
         log.critical(
-            "api.startup.clerk_missing",
-            msg="CLERK_SECRET_KEY is required when ENVIRONMENT=production",
+            "api.startup.supabase_missing",
+            msg="SUPABASE_JWT_SECRET or SUPABASE_JWKS_URL is required when ENVIRONMENT=production",
         )
     yield
 

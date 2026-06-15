@@ -24,6 +24,8 @@ dependencies = [
     "tcgscan-agents",
     "tcgscan-ml",
     "pillow>=11.2.1",
+    "pyjwt>=2.13.0",
+    "cryptography>=46.0.7",
 ]
 
 [tool.uv.sources]

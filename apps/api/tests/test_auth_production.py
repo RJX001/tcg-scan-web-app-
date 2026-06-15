@@ -50,6 +50,8 @@ async def test_dev_user_header_allowed_in_development(
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
     monkeypatch.delenv("CLERK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    monkeypatch.delenv("SUPABASE_JWKS_URL", raising=False)
     get_settings.cache_clear()
 
     from starlette.requests import Request

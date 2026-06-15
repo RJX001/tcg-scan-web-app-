@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { AdminNavLink } from "@/components/admin-nav-link";
-import { AuthBridge } from "@/components/auth-bridge";
+import { SupabaseAuthBridge } from "@/components/auth-bridge";
 import { BottomNav } from "@/components/bottom-nav";
 import { DevBanner } from "@/components/dev-banner";
 import { AuthNavDesktop, AuthNavMobile } from "@/components/auth-nav";
@@ -61,11 +60,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-zinc-50 text-zinc-900 antialiased">
-        <ClerkProvider signInFallbackRedirectUrl="/portfolio" signUpFallbackRedirectUrl="/portfolio">
-          <CurrencyProvider>
-            <PwaRegister />
-            <AuthBridge />
-            <DevBanner />
+        <CurrencyProvider>
+          <PwaRegister />
+          <SupabaseAuthBridge />
+          <DevBanner />
             <header className="sticky top-0 z-30 hidden border-b border-zinc-200 bg-white/95 backdrop-blur sm:block">
               <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
                 <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
@@ -120,9 +118,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </header>
             <div className="pb-24 sm:pb-0">{children}</div>
-            <BottomNav />
-          </CurrencyProvider>
-        </ClerkProvider>
+          <BottomNav />
+        </CurrencyProvider>
       </body>
     </html>
   );

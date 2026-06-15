@@ -71,6 +71,47 @@ class UsersRepo:
         await self._session.refresh(user)
         return await self._maybe_promote_owner(user)
 
+    async def get_or_create_by_supabase(
+        self, *, supabase_user_id: str, email: str | None = None
+    ) -> User:
+        stmt = select(User).where(User.supabase_user_id == supabase_user_id)
+        existing = (await self._session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            changed = False
+            if email and not existing.email:
+                existing.email = email
+                changed = True
+            if changed:
+                await self._session.commit()
+                await self._session.refresh(existing)
+            return await self._maybe_promote_owner(existing)
+
+        if email:
+            email_stmt = select(User).where(func.lower(User.email) == email.lower())
+            linked = (await self._session.execute(email_stmt)).scalar_one_or_none()
+            if linked is not None and linked.supabase_user_id is None:
+                linked.supabase_user_id = supabase_user_id
+                if not linked.email:
+                    linked.email = email
+                await self._session.commit()
+                await self._session.refresh(linked)
+                return await self._maybe_promote_owner(linked)
+
+        seq = await self._next_account_seq()
+        user = User(
+            supabase_user_id=supabase_user_id,
+            clerk_id=None,
+            email=email,
+            tier=UserTier.free,
+            role=UserRole.user,
+            account_seq=seq,
+            account_number=f"{seq:06d}",
+        )
+        self._session.add(user)
+        await self._session.commit()
+        await self._session.refresh(user)
+        return await self._maybe_promote_owner(user)
+
     async def get_by_id(self, user_id: uuid.UUID) -> User | None:
         return await self._session.get(User, user_id)
 
@@ -108,9 +149,7 @@ class UsersRepo:
         return user
 
     async def account_number_taken(self, account_number: str, *, exclude_id: uuid.UUID) -> bool:
-        stmt = select(User.id).where(
-            User.account_number == account_number, User.id != exclude_id
-        )
+        stmt = select(User.id).where(User.account_number == account_number, User.id != exclude_id)
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
     async def set_comps_days(self, user_id: uuid.UUID, days: int) -> User | None:

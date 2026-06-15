@@ -212,7 +212,7 @@ type TokenGetter = () => Promise<string | null>;
 
 let _getToken: TokenGetter | null = null;
 
-/** Wire Clerk's `getToken` from a client provider (see `AuthBridge` in apps/web). */
+/** Wire Supabase session token from a client provider (see `SupabaseAuthBridge` in apps/web). */
 export function setAuthTokenGetter(fn: TokenGetter): void {
   _getToken = fn;
 }

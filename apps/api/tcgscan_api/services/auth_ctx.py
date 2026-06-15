@@ -16,12 +16,17 @@ async def resolve_db_user(session: AsyncSession, request: Request) -> AuthUser:
     principal = getattr(request.state, "user", None)
     if principal is None:
         raise HTTPException(status_code=401, detail="Authentication required")
-    user = await UsersRepo(session).get_or_create(
-        clerk_id=principal.clerk_id, email=principal.email
-    )
+    repo = UsersRepo(session)
+    if principal.supabase_user_id:
+        user = await repo.get_or_create_by_supabase(
+            supabase_user_id=principal.supabase_user_id, email=principal.email
+        )
+    else:
+        user = await repo.get_or_create(clerk_id=principal.clerk_id, email=principal.email)
     return AuthUser(
         id=user.id,
-        clerk_id=user.clerk_id,
+        clerk_id=user.clerk_id or "",
+        supabase_user_id=user.supabase_user_id,
         tier=_tier_value(user),
         role=_role_value(user),
         email=user.email,
@@ -42,12 +47,17 @@ async def optional_db_user(session: AsyncSession, request: Request) -> AuthUser 
     principal = getattr(request.state, "user", None)
     if principal is None:
         return None
-    user = await UsersRepo(session).get_or_create(
-        clerk_id=principal.clerk_id, email=principal.email
-    )
+    repo = UsersRepo(session)
+    if principal.supabase_user_id:
+        user = await repo.get_or_create_by_supabase(
+            supabase_user_id=principal.supabase_user_id, email=principal.email
+        )
+    else:
+        user = await repo.get_or_create(clerk_id=principal.clerk_id, email=principal.email)
     return AuthUser(
         id=user.id,
-        clerk_id=user.clerk_id,
+        clerk_id=user.clerk_id or "",
+        supabase_user_id=user.supabase_user_id,
         tier=_tier_value(user),
         role=_role_value(user),
         email=user.email,

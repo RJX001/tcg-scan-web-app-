@@ -15,6 +15,8 @@ async def test_portfolio_requires_auth_when_dev_disabled(
     get_settings.cache_clear()
     monkeypatch.setenv("DEV_AUTH_ENABLED", "false")
     monkeypatch.delenv("CLERK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    monkeypatch.delenv("SUPABASE_JWKS_URL", raising=False)
     get_settings.cache_clear()
 
     transport = ASGITransport(app=app)

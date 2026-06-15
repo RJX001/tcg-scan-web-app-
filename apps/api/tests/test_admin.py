@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from collections.abc import AsyncIterator
 
 import pytest
@@ -97,7 +96,9 @@ async def test_admin_overview_ok_for_admin(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     user = await _make_user(sqlite_session, clerk_id="admin-user", role=UserRole.admin)
-    _patch_auth(monkeypatch, AuthUser(id=user.id, clerk_id=user.clerk_id, tier="free", role="admin"))
+    _patch_auth(
+        monkeypatch, AuthUser(id=user.id, clerk_id=user.clerk_id, tier="free", role="admin")
+    )
 
     r = await api_client.get("/v1/admin/overview", headers={"X-Dev-User-Id": "admin-user"})
     assert r.status_code == 200

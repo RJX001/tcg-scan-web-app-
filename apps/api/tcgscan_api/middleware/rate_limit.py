@@ -18,9 +18,20 @@ async def _redis() -> redis.Redis:
     return redis.from_url(settings.redis_url, decode_responses=True)
 
 
-async def _load_tier_for_clerk(clerk_id: str, email: str | None) -> str:
+async def _load_tier_for_user(user: object) -> str:
     async with get_sessionmaker()() as session:
-        db_user = await UsersRepo(session).get_or_create(clerk_id=clerk_id, email=email)
+        repo = UsersRepo(session)
+        supabase_user_id = getattr(user, "supabase_user_id", None)
+        clerk_id = getattr(user, "clerk_id", None)
+        email = getattr(user, "email", None)
+        if supabase_user_id:
+            db_user = await repo.get_or_create_by_supabase(
+                supabase_user_id=str(supabase_user_id), email=email
+            )
+        elif clerk_id:
+            db_user = await repo.get_or_create(clerk_id=str(clerk_id), email=email)
+        else:
+            return UserTier.free.value
         tier = db_user.tier
         return tier.value if isinstance(tier, UserTier) else str(tier)
 
@@ -29,12 +40,14 @@ async def check_scan_rate_limit(request: Request) -> None:
     settings = get_settings()
     user = getattr(request.state, "user", None)
     if user:
-        tier = await _load_tier_for_clerk(user.clerk_id, getattr(user, "email", None))
+        tier = await _load_tier_for_user(user)
         if tier == UserTier.pro.value or tier == "pro":
             return
 
     client_ip = request.client.host if request.client else "unknown"
-    key_id = str(getattr(user, "clerk_id", None) or client_ip)
+    key_id = str(
+        getattr(user, "supabase_user_id", None) or getattr(user, "clerk_id", None) or client_ip
+    )
     day = datetime.now(UTC).strftime("%Y-%m-%d")
     key = f"scan_rate:{key_id}:{day}"
 

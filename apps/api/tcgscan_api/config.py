@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     clerk_authorized_parties: str | None = Field(
         default="http://localhost:3000", alias="CLERK_AUTHORIZED_PARTIES"
     )
+    supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
+    supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")
+    supabase_jwt_secret: str | None = Field(default=None, alias="SUPABASE_JWT_SECRET")
+    supabase_jwks_url: str | None = Field(default=None, alias="SUPABASE_JWKS_URL")
+    supabase_service_role_key: str | None = Field(default=None, alias="SUPABASE_SERVICE_ROLE_KEY")
     owner_email: str = Field(default="", alias="OWNER_EMAIL")
     dev_auth_enabled: bool = Field(default=True, alias="DEV_AUTH_ENABLED")
     free_scans_per_day: int = Field(default=10, alias="FREE_SCANS_PER_DAY")
