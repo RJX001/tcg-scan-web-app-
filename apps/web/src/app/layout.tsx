@@ -9,7 +9,8 @@ import { NavAuth } from "@/components/nav-auth";
 import { PwaRegister } from "@/components/pwa-register";
 import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
 import "./globals.css";
-export { dynamic } from "./layout-config";
+
+export const dynamic = "force-dynamic";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 

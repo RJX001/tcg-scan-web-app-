@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
+import { Button, Card, CardContent } from "@tcgscan/ui";
 import type {
   AdminDataHealthRow,
   AdminOverview,
