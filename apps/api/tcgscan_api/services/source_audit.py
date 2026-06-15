@@ -8,6 +8,11 @@ from typing import Any
 import httpx
 import structlog
 
+from tcgscan_api.sources.dragon_ball_fusion_world import DragonBallFusionWorldClient
+from tcgscan_api.sources.dragon_ball_masters import DragonBallMastersClient
+from tcgscan_api.sources.one_piece import OnePieceClient
+from tcgscan_api.sources.ygoprodeck import YgoProDeckClient
+
 log = structlog.get_logger()
 
 
@@ -41,34 +46,36 @@ def _reddit_configured() -> bool:
     )
 
 
-def _catalog_game_status(game: str) -> dict[str, Any]:
-    env_by_game: dict[str, list[str]] = {
-        "pokemon": ["POKEMONTCG_API_KEY"],
-        "mtg": [],
-        "yugioh": [],
-        "one_piece": [],
-        "lorcana": [],
-        "sports": ["TCG_API_KEY"],
-    }
-    module_by_game: dict[str, str] = {
+def _catalog_game_status(
+    game: str,
+    *,
+    api_module: str | None = None,
+    optional_env: list[str] | None = None,
+    worker_module: str | None = None,
+    implementation: str = "working",
+    notes: str = "",
+) -> dict[str, Any]:
+    worker_modules: dict[str, str] = {
         "pokemon": "apps/worker/tcgscan_worker/catalog/pokemon.py",
         "mtg": "apps/worker/tcgscan_worker/catalog/mtg.py",
         "yugioh": "apps/worker/tcgscan_worker/catalog/yugioh.py",
         "one_piece": "apps/worker/tcgscan_worker/catalog/one_piece.py",
-        "lorcana": "apps/worker/tcgscan_worker/catalog/lorcana.py",
-        "sports": "apps/worker/tcgscan_worker/catalog/sports.py",
+        "dragon_ball_fusion_world": "apps/worker/tcgscan_worker/catalog/",
+        "dragon_ball_masters": "apps/worker/tcgscan_worker/catalog/",
     }
-    optional = env_by_game.get(game, [])
+    optional = optional_env or []
     configured = all(_env_set(name) for name in optional) if optional else True
     return {
         "id": game,
         "type": "catalog",
-        "implementation": "working" if game in module_by_game else "missing",
+        "implementation": implementation,
         "configured": configured,
         "optional_env": _env_flags(optional),
-        "worker_module": module_by_game.get(game),
-        "ingest_command": f"pnpm ingest:catalog -- --game {game}",
-        "schedule": f"catalog-weekly-{game} (Temporal)",
+        "api_module": api_module,
+        "worker_module": worker_module or worker_modules.get(game),
+        "ingest_command": f"pnpm ingest:catalog -- --game {game}" if game in worker_modules else None,
+        "schedule": f"catalog-weekly-{game} (Temporal)" if game in worker_modules else None,
+        "notes": notes,
     }
 
 
@@ -103,7 +110,7 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
         {
             "id": "ebay",
             "type": "pricing",
-            "implementation": "partial",
+            "implementation": "pending_approval",
             "configured": _ebay_configured(),
             "env": _env_flags(
                 [
@@ -125,8 +132,8 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
             "ingest_command": "pnpm ingest:pricing -- --source ebay_active|ebay_sold",
             "data_health": health_by_source.get("ebay"),
             "notes": (
-                "Official Browse API only. EPN affiliate tagging not implemented — "
-                "listing URLs stored/served without campid. EBAY_DEV_ID unused in code."
+                "Official Browse API coded in worker; production ingest pending approval. "
+                "EPN affiliate tagging not implemented."
             ),
         },
         _pricing(
@@ -158,10 +165,7 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
             "ingest_job": "MarketplacePricingWorkflow (daily)",
             "ingest_command": "pnpm ingest:pricing -- --source cardmarket",
             "data_health": health_by_source.get("cardmarket"),
-            "notes": (
-                "Apify dataset poll only (no actor runner). Official Cardmarket OAuth env vars "
-                "not read by current code. Disabled when APIFY_TOKEN missing."
-            ),
+            "notes": "Apify dataset poll only. Pricing comes later from eBay/Cardmarket/paid sources.",
         },
         {
             "id": "reddit",
@@ -172,17 +176,54 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
             "worker_module": None,
             "ingest_job": None,
             "ingest_command": None,
-            "notes": "Not implemented. Intended for hype/sentiment only — not card metadata or prices.",
+            "notes": "Not implemented. Hype/sentiment only — not card metadata or prices.",
         },
     ]
 
-    catalog = [_catalog_game_status(game) for game in ("pokemon", "mtg", "yugioh", "one_piece")]
+    catalog = [
+        _catalog_game_status(
+            "pokemon",
+            api_module="apps/worker/tcgscan_worker/catalog/pokemon.py",
+            optional_env=["POKEMONTCG_API_KEY"],
+        ),
+        _catalog_game_status(
+            "mtg",
+            api_module="apps/worker/tcgscan_worker/catalog/mtg.py",
+        ),
+        _catalog_game_status(
+            "yugioh",
+            api_module="apps/api/tcgscan_api/sources/ygoprodeck.py",
+            worker_module="apps/worker/tcgscan_worker/catalog/yugioh.py",
+            notes="YGOPRODeck public API — no key required. Cached in Redis on diagnostic probes.",
+        ),
+        _catalog_game_status(
+            "one_piece",
+            api_module="apps/api/tcgscan_api/sources/one_piece.py",
+            worker_module="apps/worker/tcgscan_worker/catalog/one_piece.py",
+            optional_env=["ONE_PIECE_API_BASE_URL"],
+            notes="OPTCG API — no key required. ONE_PIECE_API_BASE_URL optional.",
+        ),
+        _catalog_game_status(
+            "dragon_ball_fusion_world",
+            api_module="apps/api/tcgscan_api/sources/dragon_ball_fusion_world.py",
+            implementation="not_implemented",
+            optional_env=["DRAGON_BALL_FW_BASE_URL"],
+            notes="Official Bandai HTML database — clean JSON adapter not implemented yet.",
+        ),
+        _catalog_game_status(
+            "dragon_ball_masters",
+            api_module="apps/api/tcgscan_api/sources/dragon_ball_masters.py",
+            implementation="not_implemented",
+            optional_env=["DRAGON_BALL_MASTERS_BASE_URL"],
+            notes="Official Bandai card list — clean JSON adapter not implemented yet.",
+        ),
+    ]
 
     return {
         "architecture": {
             "frontend_calls": "FastAPI only (/v1/*)",
-            "external_api_calls": "apps/worker (Temporal + CLI ingest)",
-            "api_sources_folder": "none — use apps/worker/tcgscan_worker/sources and catalog/",
+            "external_api_calls": "apps/api/sources (diagnostics) + apps/worker (ingest)",
+            "api_sources_folder": "apps/api/tcgscan_api/sources/",
             "background_jobs": "Temporal workflows (not Celery)",
         },
         "pricing_sources": sources,
@@ -194,7 +235,12 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
 
 async def test_ebay_connection() -> dict[str, Any]:
     if not _ebay_configured():
-        return {"ok": False, "message": "eBay not configured (set EBAY_OAUTH_TOKEN or EBAY_APP_ID+EBAY_CERT_ID)"}
+        return {
+            "status": "missing_env",
+            "provider": "ebay",
+            "message": "eBay not configured (set EBAY_OAUTH_TOKEN or EBAY_APP_ID+EBAY_CERT_ID)",
+            "ok": False,
+        }
     try:
         if _env_set("EBAY_OAUTH_TOKEN"):
             token = os.getenv("EBAY_OAUTH_TOKEN", "").strip()
@@ -219,7 +265,12 @@ async def test_ebay_connection() -> dict[str, Any]:
                 resp.raise_for_status()
                 token = str(resp.json().get("access_token", ""))
         if not token:
-            return {"ok": False, "message": "OAuth succeeded but access_token missing"}
+            return {
+                "status": "failed",
+                "provider": "ebay",
+                "message": "OAuth succeeded but access_token missing",
+                "ok": False,
+            }
         marketplace = os.getenv("EBAY_MARKETPLACE_ID", "EBAY_GB")
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
@@ -232,10 +283,16 @@ async def test_ebay_connection() -> dict[str, Any]:
                 },
             )
             resp.raise_for_status()
-        return {"ok": True, "message": "Browse API search succeeded", "marketplace": marketplace}
+        return {
+            "status": "success",
+            "provider": "ebay",
+            "message": "Browse API search succeeded",
+            "marketplace": marketplace,
+            "ok": True,
+        }
     except Exception as exc:
         log.warning("source_audit.ebay_test_failed", error=str(exc))
-        return {"ok": False, "message": str(exc)}
+        return {"status": "failed", "provider": "ebay", "message": str(exc), "ok": False}
 
 
 async def test_pokemon_connection() -> dict[str, Any]:
@@ -250,9 +307,21 @@ async def test_pokemon_connection() -> dict[str, Any]:
                 headers=headers,
             )
             resp.raise_for_status()
-        return {"ok": True, "message": "pokemontcg.io reachable", "api_key_set": _env_set("POKEMONTCG_API_KEY")}
+        return {
+            "status": "success",
+            "provider": "pokemontcg",
+            "message": "pokemontcg.io reachable",
+            "api_key_set": _env_set("POKEMONTCG_API_KEY"),
+            "ok": True,
+        }
     except Exception as exc:
-        return {"ok": False, "message": str(exc), "api_key_set": _env_set("POKEMONTCG_API_KEY")}
+        return {
+            "status": "failed",
+            "provider": "pokemontcg",
+            "message": str(exc),
+            "api_key_set": _env_set("POKEMONTCG_API_KEY"),
+            "ok": False,
+        }
 
 
 async def test_scryfall_connection() -> dict[str, Any]:
@@ -264,61 +333,77 @@ async def test_scryfall_connection() -> dict[str, Any]:
                 headers={"User-Agent": "tcgscan/0.0.0", "Accept": "application/json"},
             )
             resp.raise_for_status()
-        return {"ok": True, "message": "Scryfall reachable"}
+        return {"status": "success", "provider": "scryfall", "message": "Scryfall reachable", "ok": True}
     except Exception as exc:
-        return {"ok": False, "message": str(exc)}
+        return {"status": "failed", "provider": "scryfall", "message": str(exc), "ok": False}
 
 
 async def test_ygopro_connection() -> dict[str, Any]:
+    client = YgoProDeckClient()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                "https://db.ygoprodeck.com/api/v7/cardinfo.php",
-                params={"name": "Dark Magician"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        count = len(data.get("data") or [])
-        return {"ok": True, "message": f"YGOPRODeck reachable ({count} cards matched)"}
-    except Exception as exc:
-        return {"ok": False, "message": str(exc)}
+        return await client.diagnostic()
+    finally:
+        await client.aclose()
 
 
 async def test_one_piece_connection() -> dict[str, Any]:
+    client = OnePieceClient()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get("https://optcgapi.com/api/allCards/")
-            resp.raise_for_status()
-            data = resp.json()
-        count = len(data.get("data") or [])
-        return {"ok": True, "message": f"OPTCG API reachable ({count} cards)"}
-    except Exception as exc:
-        return {"ok": False, "message": str(exc)}
+        return await client.diagnostic()
+    finally:
+        await client.aclose()
+
+
+async def test_dragon_ball_fusion_world_connection() -> dict[str, Any]:
+    client = DragonBallFusionWorldClient()
+    try:
+        return await client.diagnostic()
+    finally:
+        await client.aclose()
+
+
+async def test_dragon_ball_masters_connection() -> dict[str, Any]:
+    client = DragonBallMastersClient()
+    try:
+        return await client.diagnostic()
+    finally:
+        await client.aclose()
 
 
 async def test_reddit_connection() -> dict[str, Any]:
     if not _reddit_configured():
         return {
-            "ok": False,
+            "status": "not_implemented",
+            "provider": "reddit",
             "message": "Reddit integration not implemented; env vars alone are insufficient",
             "implementation": "missing",
+            "ok": False,
         }
     return {
-        "ok": False,
+        "status": "not_implemented",
+        "provider": "reddit",
         "message": "Reddit client not implemented in worker yet",
         "implementation": "missing",
+        "ok": False,
     }
 
 
 async def test_cardmarket_connection() -> dict[str, Any]:
     if _cardmarket_official_configured():
         return {
-            "ok": False,
+            "status": "partial",
+            "provider": "cardmarket",
             "message": "Official Cardmarket credentials present but no client implemented",
             "path": "official",
+            "ok": False,
         }
     if not _apify_cardmarket_enabled():
-        return {"ok": False, "message": "Apify fallback disabled (APIFY_TOKEN not set)"}
+        return {
+            "status": "missing_env",
+            "provider": "cardmarket",
+            "message": "Apify fallback disabled (APIFY_TOKEN not set)",
+            "ok": False,
+        }
     dataset_id = os.getenv("APIFY_CARDMARKET_DATASET_ID", "cardmarket-trend").strip()
     token = os.getenv("APIFY_TOKEN", "").strip()
     try:
@@ -329,10 +414,28 @@ async def test_cardmarket_connection() -> dict[str, Any]:
                 headers={"Authorization": f"Bearer {token}"},
             )
             if resp.status_code == 404:
-                return {"ok": False, "message": f"Apify dataset not found: {dataset_id}"}
+                return {
+                    "status": "failed",
+                    "provider": "cardmarket",
+                    "message": f"Apify dataset not found: {dataset_id}",
+                    "dataset_id": dataset_id,
+                    "ok": False,
+                }
             resp.raise_for_status()
         items = resp.json()
         count = len(items) if isinstance(items, list) else 0
-        return {"ok": True, "message": f"Apify dataset reachable ({count} sample items)", "dataset_id": dataset_id}
+        return {
+            "status": "success",
+            "provider": "cardmarket",
+            "message": f"Apify dataset reachable ({count} sample items)",
+            "dataset_id": dataset_id,
+            "ok": True,
+        }
     except Exception as exc:
-        return {"ok": False, "message": str(exc), "dataset_id": dataset_id}
+        return {
+            "status": "failed",
+            "provider": "cardmarket",
+            "message": str(exc),
+            "dataset_id": dataset_id,
+            "ok": False,
+        }

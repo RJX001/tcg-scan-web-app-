@@ -23,6 +23,8 @@ from tcgscan_api.services.roles import require_admin, require_owner, require_sen
 from tcgscan_api.services.source_audit import (
     build_sources_status,
     test_cardmarket_connection,
+    test_dragon_ball_fusion_world_connection,
+    test_dragon_ball_masters_connection,
     test_ebay_connection,
     test_one_piece_connection,
     test_pokemon_connection,
@@ -226,6 +228,24 @@ async def admin_test_one_piece(
 ) -> dict[str, Any]:
     await _admin_user(request, session)
     return await test_one_piece_connection()
+
+
+@router.get("/sources/test/dragon-ball-fusion-world")
+async def admin_test_dragon_ball_fusion_world(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_dragon_ball_fusion_world_connection()
+
+
+@router.get("/sources/test/dragon-ball-masters")
+async def admin_test_dragon_ball_masters(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    return await test_dragon_ball_masters_connection()
 
 
 @router.get("/sources/test/reddit")

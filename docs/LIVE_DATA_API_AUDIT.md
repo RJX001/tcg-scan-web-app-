@@ -14,10 +14,11 @@ Scope: Audit only — no risky schema rewrites, no auth/Stripe/CORS/UI changes.
 | **Railway Worker (`apps/worker`)** | **Only layer that calls external TCG/market APIs** |
 | **Postgres** | `card_identity` (catalog), `sale_event` (comps + listings), `card_price_daily` (rollups) |
 
-**Important:** There is **no** `apps/api/tcgscan_api/sources/` folder. External clients live in:
+**Important:** External clients live in:
 
+- `apps/api/tcgscan_api/sources/` — **admin diagnostics + normalisers** (OPTCG, YGOPRODeck, Bandai probes)
 - `apps/worker/tcgscan_worker/sources/` — pricing (eBay, TCGPlayer, Cardmarket)
-- `apps/worker/tcgscan_worker/catalog/` — metadata (Pokemon, Scryfall, YGOPRODeck, OPTCG, …)
+- `apps/worker/tcgscan_worker/catalog/` — metadata ingest (Pokemon, Scryfall, YGOPRODeck, OPTCG, …)
 
 Background jobs use **Temporal workflows**, not Celery (`apps/worker/tcgscan_worker/workflows/`, `schedules.py`).
 
@@ -36,6 +37,9 @@ Background jobs use **Temporal workflows**, not Celery (`apps/worker/tcgscan_wor
 | **Medium** | `TCG_API_KEY` | TCGPlayer prices via tcgapi.dev |
 | **Optional** | `APIFY_TOKEN` | Cardmarket Apify dataset poll |
 | **Optional** | `APIFY_CARDMARKET_DATASET_ID` | Default `cardmarket-trend` |
+| **Optional** | `ONE_PIECE_API_BASE_URL` | OPTCG API base (default `https://optcgapi.com`) |
+| **Optional** | `DRAGON_BALL_FW_BASE_URL` | Bandai Fusion World card list URL |
+| **Optional** | `DRAGON_BALL_MASTERS_BASE_URL` | Bandai Masters card list URL |
 | **Not used by code** | `EBAY_DEV_ID` | In `.env.example` only |
 | **Not used by code** | `EBAY_AFFILIATE_TRACKING_ID`, `EBAY_AFFILIATE_CAMPAIGN_ID` | EPN not implemented |
 | **Not used by code** | `REDDIT_*` | Reddit not implemented |
@@ -70,12 +74,16 @@ Admin-only routes (Bearer + `role` admin+):
 | `GET /v1/admin/sources/test/ebay` | OAuth + Browse search probe |
 | `GET /v1/admin/sources/test/pokemon` | pokemontcg.io probe |
 | `GET /v1/admin/sources/test/scryfall` | Scryfall probe |
-| `GET /v1/admin/sources/test/ygopro` | YGOPRODeck probe |
-| `GET /v1/admin/sources/test/one-piece` | OPTCG API probe |
+| `GET /v1/admin/sources/test/ygopro` | YGOPRODeck probe (no key) |
+| `GET /v1/admin/sources/test/one-piece` | OPTCG API probe (no key) |
+| `GET /v1/admin/sources/test/dragon-ball-fusion-world` | Bandai FW probe |
+| `GET /v1/admin/sources/test/dragon-ball-masters` | Bandai Masters probe |
 | `GET /v1/admin/sources/test/reddit` | Reports not implemented |
 | `GET /v1/admin/sources/test/cardmarket` | Apify dataset probe |
 
-Responses never include secret values — only `ok`, `message`, boolean env flags.
+Admin UI: `/admin/sources` — runs live tests via authenticated SDK (never calls external APIs from browser).
+
+Responses never include secret values — only `status`, `provider`, `message`, and safe sample fields.
 
 Existing: `GET /v1/admin/data-health` — row counts + freshness per `sale_event.source`.
 
@@ -87,7 +95,7 @@ Existing: `GET /v1/admin/data-health` — row counts + freshness per `sale_event
 
 | Item | Detail |
 |------|--------|
-| **Status** | **Partial** — Browse active/sold coded; EPN affiliate **missing** |
+| **Status** | **Pending approval** — worker coded; production ingest not enabled |
 | **Files** | `worker/sources/ebay_auth.py`, `ebay_active.py`, `ebay_sold.py`, `workflows/ebay_workflow.py` |
 | **API reads** | `GET /v1/cards/{id}/comps`, `/listings`, `/sources`; `GET /v1/market/sales`, `/listings` |
 | **Railway vars** | `EBAY_OAUTH_TOKEN` **or** `EBAY_APP_ID` + `EBAY_CERT_ID`; `EBAY_INSIGHTS_TOKEN`; `EBAY_MARKETPLACE_ID` |
@@ -151,12 +159,12 @@ Existing: `GET /v1/admin/data-health` — row counts + freshness per `sale_event
 
 | Item | Detail |
 |------|--------|
-| **Status** | **Working** |
-| **Files** | `worker/catalog/yugioh.py` |
-| **Railway vars** | None |
-| **Provides** | Name, images, archetypes, types, set metadata via `/api/v7/cardinfo.php` |
-| **Rate limit** | 2 req/s; single bulk download per run |
-| **Test** | `GET /v1/admin/sources/test/ygopro`; `pytest apps/worker/tests/test_catalog.py -k yugioh` |
+| **Status** | **Working** — no API key required |
+| **Files** | `apps/api/tcgscan_api/sources/ygoprodeck.py`, `worker/catalog/yugioh.py` |
+| **Railway vars** | None (optional `YGOPRODECK_BASE_URL`) |
+| **Provides** | Name, type, race, attribute, archetype, level/rank/link, ATK/DEF, sets, images; prices only when API returns `card_prices` |
+| **Rate limit** | 2 req/s in API adapter; Redis cache TTL 1h on diagnostic/search |
+| **Test** | `GET /v1/admin/sources/test/ygopro` |
 | **CLI** | `pnpm ingest:catalog -- --game yugioh` |
 
 ---
@@ -165,17 +173,42 @@ Existing: `GET /v1/admin/data-health` — row counts + freshness per `sale_event
 
 | Item | Detail |
 |------|--------|
-| **Status** | **Working** (catalog); no dedicated pricing source |
-| **Files** | `worker/catalog/one_piece.py` — `https://optcgapi.com/api/allCards/` |
-| **Railway vars** | None |
-| **Provides** | Card metadata, images, set/number, attributes (color, cost, power) |
+| **Status** | **Working** — no API key required |
+| **Files** | `apps/api/tcgscan_api/sources/one_piece.py`, `worker/catalog/one_piece.py` |
+| **Railway vars** | Optional `ONE_PIECE_API_BASE_URL` (default `https://optcgapi.com`) |
+| **Provides** | Sets, cards, ST/promo/don decks — metadata only; **no fake pricing** |
+| **Rate limit** | 4 req/s burst 8; Redis cache TTL 1h |
 | **Test** | `GET /v1/admin/sources/test/one-piece` |
 | **CLI** | `pnpm ingest:catalog -- --game one_piece` |
-| **Gap** | No unit test in worker; Reddit must not be used for OP card data |
 
 ---
 
-### 7. Reddit API (sentiment/hype only)
+### 7. Dragon Ball Super Fusion World (Bandai)
+
+| Item | Detail |
+|------|--------|
+| **Status** | **Not implemented** — official HTML card database only |
+| **Files** | `apps/api/tcgscan_api/sources/dragon_ball_fusion_world.py` |
+| **Railway vars** | Optional `DRAGON_BALL_FW_BASE_URL` |
+| **Provides** | Diagnostic probes JSON candidates; returns `not_implemented` when only HTML exists |
+| **Test** | `GET /v1/admin/sources/test/dragon-ball-fusion-world` |
+| **Gap** | No aggressive HTML scraping; catalog ingest not wired |
+
+---
+
+### 8. Dragon Ball Super Masters (Bandai)
+
+| Item | Detail |
+|------|--------|
+| **Status** | **Not implemented** — official HTML card list only |
+| **Files** | `apps/api/tcgscan_api/sources/dragon_ball_masters.py` |
+| **Railway vars** | Optional `DRAGON_BALL_MASTERS_BASE_URL` |
+| **Provides** | Same probe pattern as Fusion World |
+| **Test** | `GET /v1/admin/sources/test/dragon-ball-masters` |
+
+---
+
+### 9. Reddit API (sentiment/hype only)
 
 | Item | Detail |
 |------|--------|
@@ -284,12 +317,39 @@ Register schedules: `pnpm worker schedules:register` (requires Temporal + approv
 |------|--------|--------|
 | Pokémon metadata | pokemontcg.io | ✅ Worker catalog |
 | MTG metadata | Scryfall | ✅ Worker catalog |
-| Yu-Gi-Oh metadata | YGOPRODeck | ✅ Worker catalog |
-| One Piece metadata | optcgapi.com | ✅ Worker catalog |
-| Live listings + comps | eBay Browse (+ Insights) | ⚠️ Partial; no EPN |
+| Yu-Gi-Oh metadata | YGOPRODeck (no key) | ✅ API adapter + worker catalog |
+| One Piece metadata | OPTCG API (no key) | ✅ API adapter + worker catalog |
+| Dragon Ball FW metadata | Bandai official DB | ❌ HTML only — adapter not implemented |
+| Dragon Ball Masters metadata | Bandai official list | ❌ HTML only — adapter not implemented |
+| Live listings + comps | eBay Browse (+ Insights) | ⏸ Pending approval; no EPN |
 | US TCG prices | tcgapi.dev | ✅ Worker pricing |
 | EU prices | Cardmarket via Apify | ⚠️ Dataset poll only |
 | Community hype | Reddit | ❌ Not built |
+
+**Pricing rule:** Catalog metadata sources do not provide live market prices unless the upstream API explicitly includes them (e.g. YGOPRODeck `card_prices`). Live comps come later from eBay, Cardmarket, and paid APIs.
+
+---
+
+## Dragon Ball + One Piece ingest plan
+
+| Game | Source | Ingest status |
+|------|--------|---------------|
+| One Piece | OPTCG API (`ONE_PIECE_API_BASE_URL`) | **Candidate** — worker `one_piece` catalog exists; no huge automatic prod imports yet |
+| Dragon Ball Fusion World | Bandai official card database | **Blocked** — no clean JSON endpoint; probe returns `not_implemented` |
+| Dragon Ball Masters | Bandai official card list | **Blocked** — same as Fusion World |
+
+**Future worker tasks (Temporal, not yet implemented):**
+
+- `refresh_one_piece_catalogue` — upsert by `(game, source, source_card_id)`
+- `refresh_dragon_ball_fw_catalogue` — after JSON adapter or approved Bandai integration
+- `refresh_dragon_ball_masters_catalogue` — same
+
+**Operational rules:**
+
+- Store `source_runs` status per ingest (table not migrated yet — use `/v1/admin/data-health` interim)
+- Upsert key: `game + source + source_card_id`
+- No full-catalog prod imports without explicit approval
+- Pricing ingest remains separate (eBay / Cardmarket / TCGPlayer)
 
 ---
 

@@ -56,7 +56,10 @@ async def test_sources_status_ok_for_admin(
     body = r.json()
     assert "pricing_sources" in body
     assert "catalog_sources" in body
-    assert body["architecture"]["background_jobs"] == "Temporal workflows (not Celery)"
+    catalog_ids = {row["id"] for row in body["catalog_sources"]}
+    assert "dragon_ball_fusion_world" in catalog_ids
+    assert "dragon_ball_masters" in catalog_ids
+    assert body["architecture"]["api_sources_folder"] == "apps/api/tcgscan_api/sources/"
 
 
 @pytest.mark.asyncio
@@ -73,5 +76,5 @@ async def test_sources_test_reddit_not_implemented(
     r = await api_client.get("/v1/admin/sources/test/reddit", headers={"X-Dev-User-Id": "admin-user"})
     assert r.status_code == 200
     body = r.json()
-    assert body["ok"] is False
+    assert body["status"] == "not_implemented"
     assert body["implementation"] == "missing"

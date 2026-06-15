@@ -207,6 +207,67 @@ export type AdminSystem = {
   uptime_seconds: number;
 };
 
+export type AdminSourceDiagnostic = {
+  status:
+    | "success"
+    | "partial"
+    | "missing_env"
+    | "pending_approval"
+    | "not_implemented"
+    | "failed";
+  provider: string;
+  message: string;
+  source_url?: string | null;
+  sample_card_name?: string | null;
+  sample_card_id?: string | null;
+  set_count?: number | null;
+  ok?: boolean;
+  implementation?: string;
+  api_key_set?: boolean;
+  marketplace?: string;
+  dataset_id?: string;
+};
+
+export type AdminCatalogSourceStatus = {
+  id: string;
+  type: string;
+  implementation: string;
+  configured: boolean;
+  optional_env?: Record<string, boolean>;
+  api_module?: string | null;
+  worker_module?: string | null;
+  ingest_command?: string | null;
+  schedule?: string | null;
+  notes?: string;
+};
+
+export type AdminPricingSourceStatus = {
+  id: string;
+  type: string;
+  implementation: string;
+  configured: boolean;
+  env?: Record<string, boolean>;
+  worker_module?: string | null;
+  worker_modules?: string[];
+  ingest_job?: string | null;
+  ingest_jobs?: string[];
+  ingest_command?: string | null;
+  notes?: string;
+};
+
+export type AdminSourcesStatus = {
+  architecture: {
+    frontend_calls: string;
+    external_api_calls: string;
+    api_sources_folder: string;
+    background_jobs: string;
+  };
+  pricing_sources: AdminPricingSourceStatus[];
+  catalog_sources: AdminCatalogSourceStatus[];
+  vercel_env_required: string[];
+  worker_service_required: boolean;
+};
+
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const devAuthEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_ENABLED === "true";
 
@@ -427,6 +488,14 @@ export async function getAdminDataHealth(): Promise<AdminDataHealthRow[]> {
 
 export async function getAdminSystem(): Promise<AdminSystem> {
   return apiFetch<AdminSystem>("/v1/admin/system");
+}
+
+export async function getAdminSourcesStatus(): Promise<AdminSourcesStatus> {
+  return apiFetch<AdminSourcesStatus>("/v1/admin/sources/status");
+}
+
+export async function getAdminSourceTest(slug: string): Promise<AdminSourceDiagnostic> {
+  return apiFetch<AdminSourceDiagnostic>(`/v1/admin/sources/test/${slug}`);
 }
 
 export async function startCheckout(): Promise<{ url: string }> {
