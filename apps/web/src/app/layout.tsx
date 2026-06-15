@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider, UserButton } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
+import { ClerkProvider, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { AdminNavLink } from "@/components/admin-nav-link";
 import { AuthBridge } from "@/components/auth-bridge";
 import { BottomNav } from "@/components/bottom-nav";
@@ -56,9 +55,7 @@ const NAV = [
   { href: "/more", label: "More" },
 ];
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth();
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-zinc-50 text-zinc-900 antialiased">
@@ -94,16 +91,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <AdminNavLink />
                   </li>
                   <li>
-                    {userId ? (
-                      <UserButton />
-                    ) : (
+                    <SignedOut>
                       <Link
                         href="/sign-in"
                         className="rounded-full bg-blue-700 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
                       >
                         Sign in
                       </Link>
-                    )}
+                    </SignedOut>
+                    <SignedIn>
+                      <UserButton />
+                    </SignedIn>
                   </li>
                 </ul>
               </nav>
@@ -115,13 +113,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
                 <div className="flex items-center gap-2">
                   <CurrencySelect />
-                  {userId ? (
-                    <UserButton />
-                  ) : (
+                  <SignedOut>
                     <Link href="/sign-in" className="text-sm font-semibold text-blue-700">
                       Sign in
                     </Link>
-                  )}
+                  </SignedOut>
+                  <SignedIn>
+                    <UserButton />
+                  </SignedIn>
                   <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
                       <path
