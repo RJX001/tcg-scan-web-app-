@@ -1,23 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { updateSession } from "@/lib/supabase/middleware";
+import { copyResponseCookies, updateSession } from "@/lib/supabase/middleware";
 
 const protectedPrefixes = ["/portfolio", "/watchlist", "/alerts", "/account", "/admin"];
 
 export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request);
-
   const pathname = request.nextUrl.pathname;
   const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
+
+  let response = NextResponse.next({ request });
+  const { supabaseResponse, user } = await updateSession(request, response);
+  response = supabaseResponse;
 
   if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/sign-in";
     redirectUrl.searchParams.set("redirectedFrom", pathname);
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    return copyResponseCookies(response, redirectResponse);
   }
 
-  return supabaseResponse;
+  return response;
 }
 
 export const config = {

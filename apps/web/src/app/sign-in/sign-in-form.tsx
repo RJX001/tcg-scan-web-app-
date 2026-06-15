@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
 
 export function SignInForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectedFrom = searchParams.get("redirectedFrom") ?? "/portfolio";
 
@@ -33,8 +32,16 @@ export function SignInForm() {
         return;
       }
 
-      router.refresh();
-      router.push(redirectedFrom);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setError("Signed in but no session was created. Please refresh and try again.");
+        return;
+      }
+
+      window.location.assign(redirectedFrom);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {

@@ -9,17 +9,25 @@ export function SupabaseAuthBridge() {
   useEffect(() => {
     const supabase = createClient();
 
-    setAuthTokenGetter(async () => {
+    const applyTokenFromSession = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      return session?.access_token ?? null;
-    });
+      const token = session?.access_token ?? null;
+      setAuthTokenGetter(async () => token);
+    };
+
+    void applyTokenFromSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      // Token getter reads fresh session on each API call.
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        setAuthTokenGetter(async () => null);
+        return;
+      }
+      const token = session?.access_token ?? null;
+      setAuthTokenGetter(async () => token);
     });
 
     return () => subscription.unsubscribe();

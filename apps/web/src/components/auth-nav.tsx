@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
+
+const SESSION_EVENTS = new Set(["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED", "SIGNED_OUT"]);
 
 function useHasSession() {
   const [hasSession, setHasSession] = useState<boolean | null>(null);
@@ -18,7 +20,14 @@ function useHasSession() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!SESSION_EVENTS.has(event)) {
+        return;
+      }
+      if (event === "SIGNED_OUT") {
+        setHasSession(false);
+        return;
+      }
       setHasSession(Boolean(session?.access_token));
     });
 
@@ -28,11 +37,18 @@ function useHasSession() {
     };
   }, []);
 
-  return hasSession;
+  const signOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setHasSession(false);
+    window.location.assign("/");
+  }, []);
+
+  return { hasSession, signOut };
 }
 
 export function AuthNavDesktop() {
-  const hasSession = useHasSession();
+  const { hasSession, signOut } = useHasSession();
 
   if (hasSession === null) {
     return <span className="inline-block h-8 w-28" aria-hidden />;
@@ -47,9 +63,13 @@ export function AuthNavDesktop() {
         >
           Account
         </Link>
-        <Link href="/sign-out" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="text-sm font-medium text-zinc-600 hover:text-zinc-900"
+        >
           Sign out
-        </Link>
+        </button>
       </div>
     );
   }
@@ -65,7 +85,7 @@ export function AuthNavDesktop() {
 }
 
 export function AuthNavMobile() {
-  const hasSession = useHasSession();
+  const { hasSession, signOut } = useHasSession();
 
   if (hasSession === null) {
     return <span className="inline-block h-4 w-16" aria-hidden />;
@@ -77,9 +97,13 @@ export function AuthNavMobile() {
         <Link href="/portfolio" className="text-sm font-semibold text-blue-700">
           Account
         </Link>
-        <Link href="/sign-out" className="text-sm font-medium text-zinc-600">
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="text-sm font-medium text-zinc-600"
+        >
           Sign out
-        </Link>
+        </button>
       </div>
     );
   }

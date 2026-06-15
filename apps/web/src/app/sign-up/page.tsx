@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
 
 export default function SignUpPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +30,8 @@ export default function SignUpPage() {
         return;
       }
 
-      if (data.session) {
-        router.push("/portfolio");
-        router.refresh();
+      if (data.session?.access_token) {
+        window.location.assign("/portfolio");
         return;
       }
 
