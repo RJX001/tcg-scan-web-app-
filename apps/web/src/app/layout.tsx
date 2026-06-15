@@ -5,7 +5,7 @@ import { AdminNavLink } from "@/components/admin-nav-link";
 import { AuthBridge } from "@/components/auth-bridge";
 import { BottomNav } from "@/components/bottom-nav";
 import { DevBanner } from "@/components/dev-banner";
-import { NavAuth } from "@/components/nav-auth";
+import { AuthNavDesktop, AuthNavMobile } from "@/components/auth-nav";
 import { PwaRegister } from "@/components/pwa-register";
 import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
 import "./globals.css";
@@ -93,7 +93,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <AdminNavLink />
                   </li>
                   <li>
-                    <NavAuth variant="desktop" />
+                    <AuthNavDesktop />
                   </li>
                 </ul>
               </nav>
@@ -105,7 +105,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
                 <div className="flex items-center gap-2">
                   <CurrencySelect />
-                  <NavAuth variant="mobile" />
+                  <AuthNavMobile />
                   <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
                       <path
