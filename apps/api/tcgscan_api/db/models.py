@@ -164,9 +164,6 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    clerk_id: Mapped[str | None] = mapped_column(
-        String(128), unique=True, nullable=True, index=True
-    )
     supabase_user_id: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, index=True
     )

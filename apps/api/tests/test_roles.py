@@ -10,7 +10,7 @@ from tcgscan_api.services.roles import require_admin, require_owner, require_sen
 
 
 def _user(role: str) -> AuthUser:
-    return AuthUser(id=uuid.uuid4(), clerk_id="u", tier="free", role=role)
+    return AuthUser(id=uuid.uuid4(), supabase_user_id="u", tier="free", role=role)
 
 
 def test_require_admin_blocks_user() -> None:

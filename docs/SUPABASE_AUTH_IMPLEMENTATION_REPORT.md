@@ -5,7 +5,7 @@ Date: 2026-06-15
 
 ## Summary
 
-Replaced Clerk with Supabase Auth for sign-in/sign-up, session management, route protection, and API Bearer token verification. Railway PostgreSQL remains the application database. Clerk code and env vars are retained as deprecated fallbacks until production verification.
+Replaced Clerk with Supabase Auth for sign-in/sign-up, session management, route protection, and API Bearer token verification. Railway PostgreSQL remains the application database. **Clerk has been fully removed** — see [Clerk fully removed](#clerk-fully-removed) below.
 
 ## Files changed
 
@@ -39,37 +39,58 @@ Replaced Clerk with Supabase Auth for sign-in/sign-up, session management, route
 
 | File | Change |
 |------|--------|
-| `tcgscan_api/middleware/auth.py` | Supabase JWT verify (JWKS + HS256); Clerk fallback |
-| `tcgscan_api/config.py` | Supabase settings |
+| `tcgscan_api/middleware/auth.py` | Supabase JWT verify (JWKS + HS256) only |
+| `tcgscan_api/config.py` | Supabase settings only |
 | `tcgscan_api/main.py` | Production requires Supabase JWT config |
-| `tcgscan_api/db/models.py` | `supabase_user_id`; `clerk_id` nullable |
-| `tcgscan_api/repositories/users.py` | `get_or_create_by_supabase` + email linking |
-| `tcgscan_api/services/auth_ctx.py` | Resolve DB user by Supabase or Clerk id |
-| `tcgscan_api/services/billing.py` | Stripe metadata includes `supabase_user_id` |
-| `tcgscan_api/middleware/rate_limit.py` | Rate limit key uses Supabase or Clerk id |
-| `alembic/versions/0008_supabase_user_id.py` | **New migration** |
-| `pyproject.toml` | Added `pyjwt`, `cryptography` |
+| `tcgscan_api/db/models.py` | `supabase_user_id`; `clerk_id` removed |
+| `tcgscan_api/repositories/users.py` | `get_or_create(supabase_user_id=...)` + email linking |
+| `tcgscan_api/services/auth_ctx.py` | Resolve DB user by Supabase id |
+| `tcgscan_api/services/billing.py` | `AccountOut.supabase_user_id`; Stripe metadata |
+| `tcgscan_api/middleware/rate_limit.py` | Rate limit key uses `supabase_user_id` |
+| `alembic/versions/0008_supabase_user_id.py` | Adds `supabase_user_id` |
+| `alembic/versions/0009_drop_clerk_id.py` | **Drops `clerk_id` column** |
+| `pyproject.toml` | `pyjwt`, `cryptography`; removed `clerk-backend-api` |
 | Tests | Clear Supabase env in dev-auth tests |
 
 ### Shared
 
-- `.env.example` — Supabase vars added; Clerk marked deprecated
-- `packages/sdk-ts/src/index.ts` — Comment updated for Supabase bridge
+- `.env.example` — Supabase vars only; Clerk removed
+- `packages/sdk-ts/src/index.ts` — `AccountOut.supabase_user_id`
+- `vercel.json` — Clerk CSP domains removed
 - `pnpm-lock.yaml`, `uv.lock`
+
+## Clerk fully removed
+
+See also `docs/CLERK_REMOVAL_AND_SUPABASE_AUTH_REPORT.md`.
+
+| Item | Status |
+|------|--------|
+| `@clerk/nextjs` frontend package | Removed |
+| `clerk-backend-api` backend package | Removed |
+| Clerk JWT fallback in auth middleware | Removed |
+| Clerk env vars in `.env.example` | Removed |
+| Active code imports Clerk | None |
+| `users.clerk_id` DB column | **Dropped** via migration `0009_drop_clerk_id` |
+
+### Final verification commands (Clerk removal commit)
+
+```powershell
+pnpm --filter @tcgscan/web build
+pnpm typecheck
+cd apps/api && uv run pytest -q
+rg -n -S -i "clerk|@clerk|CLERK_|clerk_id|_verify_clerk_bearer" apps packages pyproject.toml package.json pnpm-lock.yaml uv.lock .env.example vercel.json --glob "!**/node_modules/**" --glob "!**/.next/**" --glob "!docs/**"
+```
 
 ## Migration
 
-**Alembic:** `0008_supabase_user_id`
+**Alembic:** `0008_supabase_user_id` then `0009_drop_clerk_id`
 
 ```bash
 pnpm db:migrate
-# or: cd apps/api && uv run alembic upgrade head
 ```
 
-Adds:
-
-- `users.supabase_user_id` — `VARCHAR(36)`, nullable, unique, indexed
-- `users.clerk_id` — altered to nullable
+- `0008` — adds `users.supabase_user_id`, makes `clerk_id` nullable
+- `0009` — drops `users.clerk_id` and its index
 
 ## Env vars — Vercel (frontend)
 
@@ -80,7 +101,7 @@ Adds:
 | `NEXT_PUBLIC_API_URL` | Yes | Railway API URL (unchanged) |
 | `NEXT_PUBLIC_SITE_URL` | Yes | e.g. `https://www.cardchart.co.uk` |
 
-Clerk vars can remain during rollout; they are no longer used by active frontend code.
+Clerk env vars are no longer used. Remove any `CLERK_*` / `NEXT_PUBLIC_CLERK_*` from Vercel and Railway dashboards.
 
 ## Env vars — Railway (backend)
 
@@ -154,11 +175,10 @@ Optional:
 
 1. **Supabase env not set** — middleware allows public routes through; protected routes redirect to sign-in but sign-in/sign-up throw if env missing.
 2. **Email confirmation** — if enabled in Supabase, sign-up shows “check your email” instead of immediate session.
-3. **Existing Clerk users** — linked by matching email on first Supabase login; users with different emails get new rows.
-4. **Clerk package still installed** — `@clerk/nextjs` in `package.json`; remove after production verification.
-5. **Edge middleware warning** — Supabase client uses Node APIs in Edge middleware (build warning only; runtime OK on Vercel).
-6. **Production env cutover** — must set Railway Supabase vars before removing Clerk vars; run Alembic on Railway DB.
-7. **Stripe** — customer mapping unchanged; uses local `users.id`; metadata now includes `supabase_user_id`.
+3. **Existing users** — email linking on first Supabase login attaches `supabase_user_id` to existing row.
+4. **Edge middleware warning** — Supabase client uses Node APIs in Edge middleware (build warning only; runtime OK on Vercel).
+5. **Production env cutover** — run Alembic `0009` on Railway before deploy.
+6. **Stripe** — customer mapping uses local `users.id`; metadata includes `supabase_user_id`.
 
 ## Next steps (manual)
 
@@ -167,4 +187,3 @@ Optional:
 3. Deploy `supabase-auth-migration` branch to preview.
 4. Complete acceptance checklist in `docs/SUPABASE_AUTH_AUDIT.md`.
 5. Merge to main only after preview tests pass.
-6. Remove Clerk package and env vars after one stable production cycle.

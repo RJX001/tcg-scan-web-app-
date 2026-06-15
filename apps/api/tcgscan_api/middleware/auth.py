@@ -1,4 +1,4 @@
-"""Auth middleware — Supabase JWT (primary), Clerk JWT fallback, or dev bypass."""
+"""Auth middleware — Supabase JWT or dev bypass."""
 
 from __future__ import annotations
 
@@ -19,8 +19,7 @@ _jwk_client: PyJWKClient | None = None
 @dataclass
 class AuthUser:
     id: uuid.UUID
-    clerk_id: str = ""
-    supabase_user_id: str | None = None
+    supabase_user_id: str
     tier: str = "free"
     role: str = "user"
     email: str | None = None
@@ -33,11 +32,16 @@ def _supabase_issuer() -> str | None:
     return f"{settings.supabase_url.rstrip('/')}/auth/v1"
 
 
+def _supabase_auth_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.supabase_jwks_url or settings.supabase_jwt_secret)
+
+
 def _verify_supabase_bearer(token: str) -> tuple[str, str | None] | None:
     """Verify Supabase access JWT. Returns (supabase_user_id, email)."""
     settings = get_settings()
     issuer = _supabase_issuer()
-    if not issuer:
+    if not issuer or not _supabase_auth_configured():
         return None
 
     try:
@@ -75,89 +79,41 @@ def _verify_supabase_bearer(token: str) -> tuple[str, str | None] | None:
     return str(sub), str(email) if email else None
 
 
-async def _verify_clerk_bearer(token: str) -> tuple[str, str | None] | None:
-    """Verify Clerk session JWT via Backend API. Returns (clerk_id, email)."""
-    settings = get_settings()
-    if not settings.clerk_secret_key:
-        return None
-    try:
-        import httpx
-        from clerk_backend_api import Clerk
-        from clerk_backend_api.security.types import AuthenticateRequestOptions
-    except ImportError:
-        return None
-
-    parties = [p.strip() for p in (settings.clerk_authorized_parties or "").split(",") if p.strip()]
-    req = httpx.Request(
-        method="GET",
-        url="https://tcgscan.local/auth",
-        headers=[("authorization", f"Bearer {token}")],
-    )
-    sdk = Clerk(bearer_auth=settings.clerk_secret_key)
-    state = sdk.authenticate_request(
-        req,
-        AuthenticateRequestOptions(authorized_parties=parties or None),
-    )
-    if not state.is_signed_in or not state.payload:
-        return None
-    sub = state.payload.get("sub")
-    if not sub:
-        return None
-    email = state.payload.get("email") or state.payload.get("primary_email_address")
-    if isinstance(email, dict):
-        email = email.get("email_address")
-    return str(sub), str(email) if email else None
-
-
-def _auth_configured() -> bool:
-    settings = get_settings()
-    return bool(
-        settings.supabase_jwks_url or settings.supabase_jwt_secret or settings.clerk_secret_key
-    )
-
-
 async def resolve_user(request: Request) -> AuthUser | None:
     settings = get_settings()
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         token = auth[7:].strip()
-        if token:
-            if settings.supabase_jwks_url or settings.supabase_jwt_secret:
-                verified = _verify_supabase_bearer(token)
-                if verified:
-                    supabase_user_id, email = verified
-                    return AuthUser(
-                        id=uuid.uuid5(uuid.NAMESPACE_URL, supabase_user_id),
-                        supabase_user_id=supabase_user_id,
-                        email=email,
-                    )
-            if settings.clerk_secret_key:
-                verified = await _verify_clerk_bearer(token)
-                if verified:
-                    clerk_id, email = verified
-                    return AuthUser(
-                        id=uuid.uuid5(uuid.NAMESPACE_URL, clerk_id),
-                        clerk_id=clerk_id,
-                        email=email,
-                    )
+        if not token:
+            return None
+        if not _supabase_auth_configured():
+            return None
+        verified = _verify_supabase_bearer(token)
+        if verified:
+            supabase_user_id, email = verified
+            return AuthUser(
+                id=uuid.uuid5(uuid.NAMESPACE_URL, supabase_user_id),
+                supabase_user_id=supabase_user_id,
+                email=email,
+            )
         return None
 
     # Never allow dev-header auth in production — blocks X-Dev-User-Id bypass.
     if settings.environment == "production":
         return None
 
-    if settings.dev_auth_enabled and not _auth_configured():
+    if settings.dev_auth_enabled and not _supabase_auth_configured():
         dev_id = request.headers.get("X-Dev-User-Id", "dev-user")
         return AuthUser(
             id=uuid.uuid5(uuid.NAMESPACE_DNS, dev_id),
-            clerk_id=dev_id,
+            supabase_user_id=dev_id,
         )
-    if settings.dev_auth_enabled and _auth_configured():
+    if settings.dev_auth_enabled and _supabase_auth_configured():
         header_dev_id = request.headers.get("X-Dev-User-Id")
         if header_dev_id:
             return AuthUser(
                 id=uuid.uuid5(uuid.NAMESPACE_DNS, header_dev_id),
-                clerk_id=header_dev_id,
+                supabase_user_id=header_dev_id,
             )
     return None
 

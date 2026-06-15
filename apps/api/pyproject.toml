@@ -19,7 +19,6 @@ dependencies = [
     "pgvector>=0.4.0",
     "python-multipart>=0.0.20",
     "stripe>=11.0.0",
-    "clerk-backend-api>=1.0.0",
     "tcgscan-sdk-py",
     "tcgscan-agents",
     "tcgscan-ml",

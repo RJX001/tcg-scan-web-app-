@@ -49,7 +49,6 @@ async def test_dev_user_header_allowed_in_development(
 ) -> None:
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
-    monkeypatch.delenv("CLERK_SECRET_KEY", raising=False)
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
     monkeypatch.delenv("SUPABASE_JWKS_URL", raising=False)
     get_settings.cache_clear()
@@ -66,4 +65,45 @@ async def test_dev_user_header_allowed_in_development(
     request = Request(scope)
     user = await resolve_user(request)
     assert user is not None
-    assert user.clerk_id == "dev-user"
+    assert user.supabase_user_id == "dev-user"
+
+
+@pytest.mark.asyncio
+async def test_supabase_bearer_token_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    import jwt
+    from datetime import UTC, datetime, timedelta
+
+    secret = "test-secret-for-jwt"
+    url = "https://testproject.supabase.co"
+    monkeypatch.setenv("SUPABASE_URL", url)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", secret)
+    monkeypatch.delenv("SUPABASE_JWKS_URL", raising=False)
+    get_settings.cache_clear()
+
+    now = datetime.now(UTC)
+    token = jwt.encode(
+        {
+            "sub": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "email": "user@example.com",
+            "aud": "authenticated",
+            "iss": f"{url}/auth/v1",
+            "exp": now + timedelta(hours=1),
+        },
+        secret,
+        algorithm="HS256",
+    )
+
+    from starlette.requests import Request
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+        "query_string": b"",
+    }
+    request = Request(scope)
+    user = await resolve_user(request)
+    assert user is not None
+    assert user.supabase_user_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    assert user.email == "user@example.com"

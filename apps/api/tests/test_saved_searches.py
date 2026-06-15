@@ -15,10 +15,10 @@ from tcgscan_api.repositories.users import UsersRepo
 async def _client_for(
     sqlite_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, *, tier: str
 ) -> AsyncClient:
-    user = await UsersRepo(sqlite_session).get_or_create(clerk_id="dev-user")
+    user = await UsersRepo(sqlite_session).get_or_create(supabase_user_id="dev-user")
 
     async def fake_resolve(_session: object, _request: object) -> AuthUser:
-        return AuthUser(id=user.id, clerk_id="dev-user", tier=tier, email=None)
+        return AuthUser(id=user.id, supabase_user_id="dev-user", tier=tier, email=None)
 
     monkeypatch.setattr("tcgscan_api.routes.searches.resolve_db_user", fake_resolve)
 

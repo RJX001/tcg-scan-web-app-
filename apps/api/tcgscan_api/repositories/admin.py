@@ -44,19 +44,13 @@ class AdminRepo:
         new_users_7d = await _count(
             select(func.count()).select_from(User).where(User.created_at >= week_ago)
         )
-        total_portfolio_items = await _count(
-            select(func.count()).select_from(PortfolioItem)
-        )
-        total_watchlist_items = await _count(
-            select(func.count()).select_from(WatchlistItem)
-        )
+        total_portfolio_items = await _count(select(func.count()).select_from(PortfolioItem))
+        total_watchlist_items = await _count(select(func.count()).select_from(WatchlistItem))
         total_alerts = await _count(select(func.count()).select_from(PriceAlert))
         cards_in_catalogue = await _count(select(func.count()).select_from(CardIdentity))
         sale_events_total = await _count(select(func.count()).select_from(SaleEvent))
         sale_events_24h = await _count(
-            select(func.count())
-            .select_from(SaleEvent)
-            .where(SaleEvent.ingested_at >= day_ago)
+            select(func.count()).select_from(SaleEvent).where(SaleEvent.ingested_at >= day_ago)
         )
         last_rollup = (
             await self._session.execute(select(func.max(CardPriceDaily.day)))
@@ -86,7 +80,7 @@ class AdminRepo:
             base = base.where(
                 func.lower(User.email).like(like)
                 | User.account_number.like(like)
-                | User.clerk_id.like(like)
+                | User.supabase_user_id.like(like)
             )
         count_stmt = select(func.count()).select_from(User)
         if q:
@@ -94,7 +88,7 @@ class AdminRepo:
             count_stmt = count_stmt.where(
                 func.lower(User.email).like(like)
                 | User.account_number.like(like)
-                | User.clerk_id.like(like)
+                | User.supabase_user_id.like(like)
             )
         total = int((await self._session.execute(count_stmt)).scalar_one())
         stmt = base.order_by(User.created_at.desc()).limit(limit).offset(offset)
@@ -182,10 +176,14 @@ class AdminRepo:
     async def data_health(self) -> list[dict[str, object]]:
         now = datetime.now(timezone.utc)
         sources = (
-            await self._session.execute(
-                select(SaleEvent.source).distinct().order_by(SaleEvent.source)
+            (
+                await self._session.execute(
+                    select(SaleEvent.source).distinct().order_by(SaleEvent.source)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if not sources:
             sources = ["ebay", "tcgplayer", "cardmarket"]
 

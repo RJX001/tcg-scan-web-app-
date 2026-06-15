@@ -16,7 +16,7 @@ async def test_digest_preview(monkeypatch: pytest.MonkeyPatch) -> None:
 
         return AuthUser(
             id=uuid.UUID("11111111-1111-4111-8111-111111111111"),
-            clerk_id="dev-user",
+            supabase_user_id="dev-user",
             tier="pro",
             email=None,
         )
@@ -51,7 +51,7 @@ async def test_portfolio_export_csv(monkeypatch: pytest.MonkeyPatch) -> None:
 
         return AuthUser(
             id=uuid.UUID("11111111-1111-4111-8111-111111111111"),
-            clerk_id="dev-user",
+            supabase_user_id="dev-user",
             tier="pro",
             email=None,
         )

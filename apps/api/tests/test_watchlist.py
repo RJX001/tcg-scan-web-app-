@@ -23,10 +23,10 @@ async def _setup(
     )
     card = await cards.get_by_external(Game.pokemon, "base1", "4/102")
     assert card is not None
-    user = await UsersRepo(sqlite_session).get_or_create(clerk_id="dev-user")
+    user = await UsersRepo(sqlite_session).get_or_create(supabase_user_id="dev-user")
 
     async def fake_resolve(_session: object, _request: object) -> AuthUser:
-        return AuthUser(id=user.id, clerk_id="dev-user", tier=tier, email=None)
+        return AuthUser(id=user.id, supabase_user_id="dev-user", tier=tier, email=None)
 
     monkeypatch.setattr("tcgscan_api.routes.watchlist.resolve_db_user", fake_resolve)
 

@@ -14,7 +14,6 @@ async def test_portfolio_requires_auth_when_dev_disabled(
 
     get_settings.cache_clear()
     monkeypatch.setenv("DEV_AUTH_ENABLED", "false")
-    monkeypatch.delenv("CLERK_SECRET_KEY", raising=False)
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
     monkeypatch.delenv("SUPABASE_JWKS_URL", raising=False)
     get_settings.cache_clear()
@@ -40,7 +39,7 @@ async def test_portfolio_dev_auth(monkeypatch: pytest.MonkeyPatch) -> None:
 
         return AuthUser(
             id=uuid.UUID("11111111-1111-4111-8111-111111111111"),
-            clerk_id="test-user",
+            supabase_user_id="test-user",
             tier="free",
             email=None,
         )

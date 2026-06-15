@@ -44,36 +44,7 @@ class UsersRepo:
             await self._session.refresh(user)
         return user
 
-    async def get_or_create(self, *, clerk_id: str, email: str | None = None) -> User:
-        stmt = select(User).where(User.clerk_id == clerk_id)
-        existing = (await self._session.execute(stmt)).scalar_one_or_none()
-        if existing:
-            changed = False
-            if email and not existing.email:
-                existing.email = email
-                changed = True
-            if changed:
-                await self._session.commit()
-                await self._session.refresh(existing)
-            return await self._maybe_promote_owner(existing)
-
-        seq = await self._next_account_seq()
-        user = User(
-            clerk_id=clerk_id,
-            email=email,
-            tier=UserTier.free,
-            role=UserRole.user,
-            account_seq=seq,
-            account_number=f"{seq:06d}",
-        )
-        self._session.add(user)
-        await self._session.commit()
-        await self._session.refresh(user)
-        return await self._maybe_promote_owner(user)
-
-    async def get_or_create_by_supabase(
-        self, *, supabase_user_id: str, email: str | None = None
-    ) -> User:
+    async def get_or_create(self, *, supabase_user_id: str, email: str | None = None) -> User:
         stmt = select(User).where(User.supabase_user_id == supabase_user_id)
         existing = (await self._session.execute(stmt)).scalar_one_or_none()
         if existing:
@@ -100,7 +71,6 @@ class UsersRepo:
         seq = await self._next_account_seq()
         user = User(
             supabase_user_id=supabase_user_id,
-            clerk_id=None,
             email=email,
             tier=UserTier.free,
             role=UserRole.user,

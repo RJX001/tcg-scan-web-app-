@@ -141,7 +141,7 @@ export type PortfolioSummaryOut = {
 };
 
 export type AccountOut = {
-  clerk_id: string;
+  supabase_user_id: string;
   email?: string | null;
   tier: string;
   role?: string;

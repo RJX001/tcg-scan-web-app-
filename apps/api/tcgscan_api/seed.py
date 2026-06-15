@@ -452,7 +452,7 @@ async def seed_async() -> None:
         )
 
         dev_user = await UsersRepo(session).get_or_create(
-            clerk_id="dev-user", email="dev@localhost"
+            supabase_user_id="dev-user", email="dev@localhost"
         )
         if dev_user.tier != UserTier.pro:
             await UsersRepo(session).set_tier(dev_user.id, UserTier.pro)

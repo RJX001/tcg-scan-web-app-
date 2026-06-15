@@ -39,10 +39,6 @@ class Settings(BaseSettings):
     tcg_api_key: str | None = Field(default=None, alias="TCG_API_KEY")
     apify_token: str | None = Field(default=None, alias="APIFY_TOKEN")
 
-    clerk_secret_key: str | None = Field(default=None, alias="CLERK_SECRET_KEY")
-    clerk_authorized_parties: str | None = Field(
-        default="http://localhost:3000", alias="CLERK_AUTHORIZED_PARTIES"
-    )
     supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
     supabase_anon_key: str | None = Field(default=None, alias="SUPABASE_ANON_KEY")
     supabase_jwt_secret: str | None = Field(default=None, alias="SUPABASE_JWT_SECRET")

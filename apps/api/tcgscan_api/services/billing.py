@@ -24,7 +24,7 @@ ALLOWED_COMPS_DAYS = (7, 30, 90, 180)
 
 
 class AccountOut(BaseModel):
-    clerk_id: str
+    supabase_user_id: str
     email: str | None = None
     tier: str
     role: str = "user"
@@ -63,7 +63,7 @@ async def get_account(session: AsyncSession, request: Request) -> AccountOut:
     comps_days = user_row.comps_days if user_row is not None else 30
 
     return AccountOut(
-        clerk_id=auth.clerk_id,
+        supabase_user_id=auth.supabase_user_id,
         email=auth.email,
         tier=auth.tier,
         role=auth.role,
@@ -104,8 +104,7 @@ async def create_checkout_session(session: AsyncSession, auth: AuthUser) -> Chec
     if not customer_id:
         customer = stripe.Customer.create(
             metadata={
-                "clerk_id": auth.clerk_id or "",
-                "supabase_user_id": auth.supabase_user_id or "",
+                "supabase_user_id": auth.supabase_user_id,
                 "user_id": str(user_row.id),
             },
             email=user_row.email,

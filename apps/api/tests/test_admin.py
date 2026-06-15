@@ -29,13 +29,13 @@ async def api_client(sqlite_session: object) -> AsyncIterator[AsyncClient]:
 async def _make_user(
     session: object,
     *,
-    clerk_id: str,
+    supabase_user_id: str,
     role: UserRole = UserRole.user,
     email: str | None = None,
     account_number: str | None = None,
 ) -> User:
     repo = UsersRepo(session)  # type: ignore[arg-type]
-    user = await repo.get_or_create(clerk_id=clerk_id, email=email)
+    user = await repo.get_or_create(supabase_user_id=supabase_user_id, email=email)
     if role != UserRole.user:
         await repo.set_role(user.id, role)
         user = await repo.get_by_id(user.id)
@@ -65,7 +65,7 @@ async def test_owner_email_bootstrap(
     get_settings.cache_clear()
 
     user = await UsersRepo(sqlite_session).get_or_create(  # type: ignore[arg-type]
-        clerk_id="owner-clerk", email="owner@example.com"
+        supabase_user_id="owner-user", email="owner@example.com"
     )
     assert user.role == UserRole.owner
     get_settings.cache_clear()
@@ -75,7 +75,7 @@ async def test_owner_email_bootstrap(
 async def test_new_user_gets_account_number_starting_at_10(
     sqlite_session: object,
 ) -> None:
-    user = await UsersRepo(sqlite_session).get_or_create(clerk_id="acct-user")  # type: ignore[arg-type]
+    user = await UsersRepo(sqlite_session).get_or_create(supabase_user_id="acct-user")  # type: ignore[arg-type]
     assert user.account_seq == 10
     assert user.account_number == "000010"
 
@@ -84,8 +84,11 @@ async def test_new_user_gets_account_number_starting_at_10(
 async def test_admin_overview_forbidden_for_user(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    user = await _make_user(sqlite_session, clerk_id="plain-user", role=UserRole.user)
-    _patch_auth(monkeypatch, AuthUser(id=user.id, clerk_id=user.clerk_id, tier="free", role="user"))
+    user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
+    _patch_auth(
+        monkeypatch,
+        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id, tier="free", role="user"),
+    )
 
     r = await api_client.get("/v1/admin/overview", headers={"X-Dev-User-Id": "plain-user"})
     assert r.status_code == 403
@@ -95,9 +98,10 @@ async def test_admin_overview_forbidden_for_user(
 async def test_admin_overview_ok_for_admin(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    user = await _make_user(sqlite_session, clerk_id="admin-user", role=UserRole.admin)
+    user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
-        monkeypatch, AuthUser(id=user.id, clerk_id=user.clerk_id, tier="free", role="admin")
+        monkeypatch,
+        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id, tier="free", role="admin"),
     )
 
     r = await api_client.get("/v1/admin/overview", headers={"X-Dev-User-Id": "admin-user"})
@@ -110,13 +114,15 @@ async def test_admin_overview_ok_for_admin(
 async def test_set_tier_senior_only(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    target = await _make_user(sqlite_session, clerk_id="target-user")
-    admin = await _make_user(sqlite_session, clerk_id="plain-admin", role=UserRole.admin)
-    senior = await _make_user(sqlite_session, clerk_id="senior-admin", role=UserRole.admin_senior)
+    target = await _make_user(sqlite_session, supabase_user_id="target-user")
+    admin = await _make_user(sqlite_session, supabase_user_id="plain-admin", role=UserRole.admin)
+    senior = await _make_user(
+        sqlite_session, supabase_user_id="senior-admin", role=UserRole.admin_senior
+    )
 
     _patch_auth(
         monkeypatch,
-        AuthUser(id=admin.id, clerk_id=admin.clerk_id, tier="free", role="admin"),
+        AuthUser(id=admin.id, supabase_user_id=admin.supabase_user_id, tier="free", role="admin"),
     )
     r_forbidden = await api_client.post(
         f"/v1/admin/users/{target.id}/tier",
@@ -126,7 +132,9 @@ async def test_set_tier_senior_only(
 
     _patch_auth(
         monkeypatch,
-        AuthUser(id=senior.id, clerk_id=senior.clerk_id, tier="free", role="admin_senior"),
+        AuthUser(
+            id=senior.id, supabase_user_id=senior.supabase_user_id, tier="free", role="admin_senior"
+        ),
     )
     r_ok = await api_client.post(
         f"/v1/admin/users/{target.id}/tier",
@@ -145,13 +153,15 @@ async def test_set_tier_senior_only(
 async def test_set_role_owner_only(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    target = await _make_user(sqlite_session, clerk_id="role-target")
-    senior = await _make_user(sqlite_session, clerk_id="senior", role=UserRole.admin_senior)
-    owner = await _make_user(sqlite_session, clerk_id="owner", role=UserRole.owner)
+    target = await _make_user(sqlite_session, supabase_user_id="role-target")
+    senior = await _make_user(sqlite_session, supabase_user_id="senior", role=UserRole.admin_senior)
+    owner = await _make_user(sqlite_session, supabase_user_id="owner", role=UserRole.owner)
 
     _patch_auth(
         monkeypatch,
-        AuthUser(id=senior.id, clerk_id=senior.clerk_id, tier="free", role="admin_senior"),
+        AuthUser(
+            id=senior.id, supabase_user_id=senior.supabase_user_id, tier="free", role="admin_senior"
+        ),
     )
     r_forbidden = await api_client.post(
         f"/v1/admin/users/{target.id}/role",
@@ -161,7 +171,7 @@ async def test_set_role_owner_only(
 
     _patch_auth(
         monkeypatch,
-        AuthUser(id=owner.id, clerk_id=owner.clerk_id, tier="free", role="owner"),
+        AuthUser(id=owner.id, supabase_user_id=owner.supabase_user_id, tier="free", role="owner"),
     )
     r_ok = await api_client.post(
         f"/v1/admin/users/{target.id}/role",
@@ -177,10 +187,10 @@ async def test_set_role_owner_only(
 async def test_owner_cannot_demote_self(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    owner = await _make_user(sqlite_session, clerk_id="owner-self", role=UserRole.owner)
+    owner = await _make_user(sqlite_session, supabase_user_id="owner-self", role=UserRole.owner)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=owner.id, clerk_id=owner.clerk_id, tier="free", role="owner"),
+        AuthUser(id=owner.id, supabase_user_id=owner.supabase_user_id, tier="free", role="owner"),
     )
 
     r = await api_client.post(
@@ -195,12 +205,12 @@ async def test_owner_cannot_demote_self(
 async def test_duplicate_account_number_409(
     api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    await _make_user(sqlite_session, clerk_id="u1", account_number="000001")
-    target = await _make_user(sqlite_session, clerk_id="u2")
-    owner = await _make_user(sqlite_session, clerk_id="owner-dup", role=UserRole.owner)
+    await _make_user(sqlite_session, supabase_user_id="u1", account_number="000001")
+    target = await _make_user(sqlite_session, supabase_user_id="u2")
+    owner = await _make_user(sqlite_session, supabase_user_id="owner-dup", role=UserRole.owner)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=owner.id, clerk_id=owner.clerk_id, tier="free", role="owner"),
+        AuthUser(id=owner.id, supabase_user_id=owner.supabase_user_id, tier="free", role="owner"),
     )
 
     r = await api_client.post(
