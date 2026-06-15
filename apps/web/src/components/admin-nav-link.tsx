@@ -4,15 +4,27 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getMe } from "@tcgscan/sdk-ts";
 
-const ADMIN_ROLES = new Set(["admin", "admin_senior", "owner"]);
+import { isAdminRole } from "@/lib/auth/admin-access";
+import { syncApiAuthFromSupabase } from "@/lib/auth/api-session";
 
 export function AdminNavLink({ className }: { className?: string }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    void getMe()
-      .then((me) => setShow(ADMIN_ROLES.has(me.role ?? "user")))
-      .catch(() => setShow(false));
+    async function load() {
+      const token = await syncApiAuthFromSupabase();
+      if (!token) {
+        setShow(false);
+        return;
+      }
+      try {
+        const me = await getMe();
+        setShow(isAdminRole(me.role));
+      } catch {
+        setShow(false);
+      }
+    }
+    void load();
   }, []);
 
   if (!show) return null;

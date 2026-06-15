@@ -22,7 +22,9 @@ import {
 } from "@tcgscan/sdk-ts";
 import { useCallback, useEffect, useState } from "react";
 
-const ADMIN_ROLES = new Set(["admin", "admin_senior", "owner"]);
+import { isAdminRole } from "@/lib/auth/admin-access";
+import { syncApiAuthFromSupabase } from "@/lib/auth/api-session";
+
 const SENIOR_ROLES = new Set(["admin_senior", "owner"]);
 
 function statusBadge(status: AdminDataHealthRow["status"]) {
@@ -58,7 +60,10 @@ function KpiCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+type AccessState = "loading" | "unauthenticated" | "forbidden" | "ready";
+
 export function AdminClient() {
+  const [access, setAccess] = useState<AccessState>("loading");
   const [me, setMe] = useState<AccountOut | null>(null);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [dataHealth, setDataHealth] = useState<AdminDataHealthRow[]>([]);
@@ -68,7 +73,6 @@ export function AdminClient() {
   const [userTotal, setUserTotal] = useState(0);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const loadUsers = useCallback(async (q?: string) => {
@@ -77,33 +81,55 @@ export function AdminClient() {
     setUserTotal(page.total);
   }, []);
 
+  const loadDashboard = useCallback(async () => {
+    const [ov, dh, sys] = await Promise.all([
+      getAdminOverview(),
+      getAdminDataHealth(),
+      getAdminSystem(),
+    ]);
+    setOverview(ov);
+    setDataHealth(dh);
+    setSystem(sys);
+    await loadUsers();
+    return ov;
+  }, [loadUsers]);
+
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
+    setAccess("loading");
+
+    const token = await syncApiAuthFromSupabase();
+    if (!token) {
+      setAccess("unauthenticated");
+      window.location.assign("/sign-in?redirectedFrom=%2Fadmin");
+      return;
+    }
+
     try {
       const account = await getMe();
       setMe(account);
-      if (!ADMIN_ROLES.has(account.role ?? "user")) {
+
+      if (!isAdminRole(account.role)) {
+        setAccess("forbidden");
         return;
       }
-      const [ov, dh, sys] = await Promise.all([
-        getAdminOverview(),
-        getAdminDataHealth(),
-        getAdminSystem(),
-      ]);
-      setOverview(ov);
-      setDataHealth(dh);
-      setSystem(sys);
-      if (SENIOR_ROLES.has(account.role ?? "user")) {
+
+      setAccess("ready");
+      await loadDashboard();
+      if (SENIOR_ROLES.has(account.role)) {
         setRevenue(await getAdminRevenue());
       }
-      await loadUsers();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load admin dashboard");
-    } finally {
-      setLoading(false);
+      const message = e instanceof Error ? e.message : "Failed to load admin dashboard";
+      if (message.includes("API error 401")) {
+        setAccess("unauthenticated");
+        window.location.assign("/sign-in?redirectedFrom=%2Fadmin");
+        return;
+      }
+      setError(message);
+      setAccess("forbidden");
     }
-  }, [loadUsers]);
+  }, [loadDashboard]);
 
   useEffect(() => {
     void load();
@@ -145,22 +171,30 @@ export function AdminClient() {
     }
   }
 
-  if (loading) {
+  if (access === "loading") {
     return <p className="text-sm text-zinc-500">Loading admin dashboard…</p>;
   }
 
-  if (!me || !ADMIN_ROLES.has(me.role ?? "user")) {
+  if (access === "forbidden") {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p className="font-semibold text-zinc-900">Not authorised</p>
-          <p className="mt-1 text-sm text-zinc-600">This area is restricted to admin roles.</p>
+          <p className="font-semibold text-zinc-900">Admin access required</p>
+          <p className="mt-1 text-sm text-zinc-600">
+            Your account does not have admin permissions. Current role:{" "}
+            <span className="font-mono">{me?.role ?? "unknown"}</span>.
+          </p>
+          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </CardContent>
       </Card>
     );
   }
 
-  const isSenior = SENIOR_ROLES.has(me.role ?? "user");
+  if (access !== "ready" || !me) {
+    return null;
+  }
+
+  const isSenior = SENIOR_ROLES.has(me.role);
   const isOwner = me.role === "owner";
 
   return (

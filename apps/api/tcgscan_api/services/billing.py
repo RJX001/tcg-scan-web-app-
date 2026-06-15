@@ -24,6 +24,7 @@ ALLOWED_COMPS_DAYS = (7, 30, 90, 180)
 
 
 class AccountOut(BaseModel):
+    id: uuid.UUID
     supabase_user_id: str
     email: str | None = None
     tier: str
@@ -63,6 +64,7 @@ async def get_account(session: AsyncSession, request: Request) -> AccountOut:
     comps_days = user_row.comps_days if user_row is not None else 30
 
     return AccountOut(
+        id=auth.id,
         supabase_user_id=auth.supabase_user_id,
         email=auth.email,
         tier=auth.tier,

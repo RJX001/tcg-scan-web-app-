@@ -141,10 +141,11 @@ export type PortfolioSummaryOut = {
 };
 
 export type AccountOut = {
+  id: string;
   supabase_user_id: string;
   email?: string | null;
   tier: string;
-  role?: string;
+  role: string;
   account_number?: string | null;
   portfolio_limit?: number | null;
   scans_per_day?: number | null;

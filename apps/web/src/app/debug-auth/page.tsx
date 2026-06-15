@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { syncApiAuthFromSupabase } from "@/lib/auth/api-session";
 import { createClient } from "@/lib/supabase/browser";
 
 type DebugAuthState = {
@@ -10,7 +11,14 @@ type DebugAuthState = {
   email: string | null;
   cookieHasSbPrefix: boolean;
   localStorageSupabaseKeys: number;
+  backendMeLoaded: boolean;
+  backendEmail: string | null;
+  backendRole: string | null;
+  backendTier: string | null;
+  backendStatusCode: number | null;
 };
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function DebugAuthPage() {
   const [state, setState] = useState<DebugAuthState | null>(null);
@@ -26,6 +34,32 @@ export default function DebugAuthPage() {
           data: { session },
         } = await supabase.auth.getSession();
 
+        const token = await syncApiAuthFromSupabase();
+
+        let backendMeLoaded = false;
+        let backendEmail: string | null = null;
+        let backendRole: string | null = null;
+        let backendTier: string | null = null;
+        let backendStatusCode: number | null = null;
+
+        if (token) {
+          const res = await fetch(`${apiBaseUrl}/v1/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          backendStatusCode = res.status;
+          if (res.ok) {
+            const me = (await res.json()) as {
+              email?: string | null;
+              role?: string;
+              tier?: string;
+            };
+            backendMeLoaded = true;
+            backendEmail = me.email ?? null;
+            backendRole = me.role ?? null;
+            backendTier = me.tier ?? null;
+          }
+        }
+
         const next: DebugAuthState = {
           hasSession: Boolean(session),
           hasAccessToken: Boolean(session?.access_token),
@@ -38,6 +72,11 @@ export default function DebugAuthPage() {
                   (key) => key.includes("supabase") || key.startsWith("sb-"),
                 ).length
               : 0,
+          backendMeLoaded,
+          backendEmail,
+          backendRole,
+          backendTier,
+          backendStatusCode,
         };
 
         if (mounted) setState(next);
@@ -86,6 +125,26 @@ export default function DebugAuthPage() {
           <div className="flex justify-between gap-4">
             <dt className="text-zinc-600">localStorageSupabaseKeys</dt>
             <dd className="font-mono">{state.localStorageSupabaseKeys}</dd>
+          </div>
+          <div className="flex justify-between gap-4 border-t border-zinc-100 pt-3">
+            <dt className="text-zinc-600">backendMeLoaded</dt>
+            <dd className="font-mono">{String(state.backendMeLoaded)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-600">backendEmail</dt>
+            <dd className="font-mono">{state.backendEmail ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-600">backendRole</dt>
+            <dd className="font-mono">{state.backendRole ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-600">backendTier</dt>
+            <dd className="font-mono">{state.backendTier ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-zinc-600">backendStatusCode</dt>
+            <dd className="font-mono">{state.backendStatusCode ?? "—"}</dd>
           </div>
         </dl>
       ) : (
