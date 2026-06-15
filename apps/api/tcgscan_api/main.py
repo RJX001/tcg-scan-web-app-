@@ -2,12 +2,11 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
 import structlog
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from tcgscan_api.config import get_settings
-from tcgscan_api.cors import CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS, parse_cors_origins
+from tcgscan_api.cors import cors_origins_from_settings, wrap_with_cors
 from tcgscan_api.errors import AppError
 from tcgscan_api.middleware.auth import AuthMiddleware
 from tcgscan_api.routes import (
@@ -28,16 +27,11 @@ from tcgscan_api.telemetry import init_observability
 log = structlog.get_logger()
 
 
-def _cors_origins_from_settings() -> list[str]:
-    settings = get_settings()
-    return parse_cors_origins(settings.cors_origins)
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_observability()
     settings = get_settings()
-    cors_origins = _cors_origins_from_settings()
+    cors_origins = cors_origins_from_settings()
     log.info("Allowed CORS origins: %s", cors_origins)
     if settings.environment == "production" and not (
         settings.supabase_jwt_secret or settings.supabase_jwks_url
@@ -49,20 +43,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="TCG Chart API", version="0.0.0", lifespan=lifespan)
-
-# CORSMiddleware must be registered before auth so preflight/401 responses include CORS headers.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins_from_settings(),
-    allow_credentials=True,
-    allow_methods=CORS_ALLOW_METHODS,
-    allow_headers=CORS_ALLOW_HEADERS,
-)
-app.add_middleware(AuthMiddleware)
+fastapi_app = FastAPI(title="TCG Chart API", version="0.0.0", lifespan=lifespan)
+fastapi_app.add_middleware(AuthMiddleware)
 
 
-@app.exception_handler(AppError)
+@fastapi_app.exception_handler(AppError)
 async def app_error_handler(_req: Request, exc: AppError) -> JSONResponse:
     """RFC 9457 problem-json mapping."""
     return JSONResponse(
@@ -77,13 +62,33 @@ async def app_error_handler(_req: Request, exc: AppError) -> JSONResponse:
     )
 
 
-app.include_router(health.router, prefix="/v1")
-app.include_router(cards.router, prefix="/v1")
-app.include_router(scan.router, prefix="/v1")
-app.include_router(portfolio.router, prefix="/v1")
-app.include_router(billing.router, prefix="/v1")
-app.include_router(insights.router, prefix="/v1")
-app.include_router(market.router, prefix="/v1")
-app.include_router(searches.router, prefix="/v1")
-app.include_router(watchlist.router, prefix="/v1")
-app.include_router(admin.router, prefix="/v1")
+@fastapi_app.exception_handler(HTTPException)
+async def http_exception_handler(_req: Request, exc: HTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+
+@fastapi_app.exception_handler(Exception)
+async def unhandled_exception_handler(_req: Request, exc: Exception) -> JSONResponse:
+    log.exception("api.unhandled_exception", path=_req.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
+fastapi_app.include_router(health.router, prefix="/v1")
+fastapi_app.include_router(cards.router, prefix="/v1")
+fastapi_app.include_router(scan.router, prefix="/v1")
+fastapi_app.include_router(portfolio.router, prefix="/v1")
+fastapi_app.include_router(billing.router, prefix="/v1")
+fastapi_app.include_router(insights.router, prefix="/v1")
+fastapi_app.include_router(market.router, prefix="/v1")
+fastapi_app.include_router(searches.router, prefix="/v1")
+fastapi_app.include_router(watchlist.router, prefix="/v1")
+fastapi_app.include_router(admin.router, prefix="/v1")
+
+# Outermost ASGI wrapper — uvicorn imports `app`.
+app = wrap_with_cors(fastapi_app)

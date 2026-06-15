@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import Game
 from tcgscan_api.db.session import get_session
-from tcgscan_api.main import app
+from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.users import UsersRepo
@@ -33,7 +33,7 @@ async def _setup(
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     return client, str(card.id)
 
@@ -63,7 +63,7 @@ async def test_watchlist_crud(
             r = await client.get("/v1/watchlist")
             assert r.json() == []
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -80,4 +80,4 @@ async def test_watchlist_requires_pro(
             assert r.status_code == 200
             assert r.json() == []
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()

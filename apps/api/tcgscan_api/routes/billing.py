@@ -44,7 +44,6 @@ async def me(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> AccountOut:
-    await resolve_db_user(session, request)
     return await get_account(session, request)
 
 

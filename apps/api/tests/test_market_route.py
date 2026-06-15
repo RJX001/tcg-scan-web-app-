@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import CardPriceDaily, Game, SaleKind
 from tcgscan_api.db.session import get_session
-from tcgscan_api.main import app
+from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.market import MarketRepo, PopulationRepo
 from tcgscan_api.repositories.sales import SalesRepo
@@ -115,7 +115,7 @@ async def test_population_totals_and_endpoint(sqlite_session: AsyncSession) -> N
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -125,7 +125,7 @@ async def test_population_totals_and_endpoint(sqlite_session: AsyncSession) -> N
         assert body["total"] == 370
         assert {e["grade"]: e["pop_count"] for e in body["entries"]} == {"10": 120, "9": 250}
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -163,7 +163,7 @@ async def test_market_index(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -173,7 +173,7 @@ async def test_market_index(sqlite_session: AsyncSession) -> None:
         assert body["name"] == "Pokemon Index"
         assert len(body["points"]) >= 1
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -228,7 +228,7 @@ async def test_browse_listings(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -239,7 +239,7 @@ async def test_browse_listings(sqlite_session: AsyncSession) -> None:
         assert body[0]["card"]["name"] == "Charizard"
         assert body[0]["price_usd"] == 250.0
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -313,7 +313,7 @@ async def test_pop_sort_requires_pro(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -325,7 +325,7 @@ async def test_pop_sort_requires_pro(sqlite_session: AsyncSession) -> None:
             r = await client.get("/v1/market/movers?sort=pop")
             assert r.status_code == 403
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -350,7 +350,7 @@ async def test_indexes_summary(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -362,7 +362,7 @@ async def test_indexes_summary(sqlite_session: AsyncSession) -> None:
         pokemon = next(i for i in body if i["key"] == "pokemon")
         assert pokemon["change_pct"] == 10.0
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -379,7 +379,7 @@ async def test_browse_sales(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -390,7 +390,7 @@ async def test_browse_sales(sqlite_session: AsyncSession) -> None:
         if body:
             assert "sold_at" in body[0] and "market_region" in body[0]
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -411,7 +411,7 @@ async def test_fx_rates(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -421,7 +421,7 @@ async def test_fx_rates(sqlite_session: AsyncSession) -> None:
         assert body["base"] == "USD"
         assert body["rates"]["GBP"] == 1.27
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -431,7 +431,7 @@ async def test_market_movers_route(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -445,4 +445,4 @@ async def test_market_movers_route(sqlite_session: AsyncSession) -> None:
         assert round(top["change_pct"]) == 100
         assert top["last_sold_usd"] == 200.0
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()

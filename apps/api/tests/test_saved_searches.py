@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.session import get_session
-from tcgscan_api.main import app
+from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.users import UsersRepo
 
@@ -25,7 +25,7 @@ async def _client_for(
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
@@ -65,7 +65,7 @@ async def test_saved_search_crud(
             r = await client.post("/v1/searches", json={"name": "bad", "params": {"bogus": "x"}})
             assert r.status_code == 422
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -82,4 +82,4 @@ async def test_saved_search_requires_pro(
             assert r.status_code == 200
             assert r.json() == []
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()

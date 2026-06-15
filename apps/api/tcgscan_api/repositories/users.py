@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+import structlog
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,8 @@ from tcgscan_api.db.models import (
     WatchlistItem,
 )
 
+log = structlog.get_logger()
+
 
 class UsersRepo:
     def __init__(self, session: AsyncSession) -> None:
@@ -24,12 +27,42 @@ class UsersRepo:
     async def _next_account_seq(self) -> int:
         bind = self._session.get_bind()
         if bind is not None and bind.dialect.name == "postgresql":
-            result = await self._session.execute(text("SELECT nextval('user_account_seq')"))
-            return int(result.scalar_one())
+            try:
+                result = await self._session.execute(text("SELECT nextval('user_account_seq')"))
+                return int(result.scalar_one())
+            except Exception:
+                log.warning("users.account_seq_missing", fallback="max_plus_one")
         row = await self._session.execute(
             text("SELECT COALESCE(MAX(account_seq), 9) + 1 FROM users")
         )
         return int(row.scalar_one())
+
+    async def _users_by_email(self, email: str) -> list[User]:
+        stmt = (
+            select(User)
+            .where(func.lower(User.email) == email.lower())
+            .order_by(User.created_at.asc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def _linkable_user_by_email(self, email: str, supabase_user_id: str) -> User | None:
+        matches = await self._users_by_email(email)
+        if not matches:
+            return None
+        if len(matches) > 1:
+            log.warning("users.duplicate_email", email=email, count=len(matches))
+        for user in matches:
+            if user.supabase_user_id == supabase_user_id:
+                return user
+        linkable = [user for user in matches if user.supabase_user_id is None]
+        if len(linkable) == 1:
+            return linkable[0]
+        if len(linkable) > 1:
+            log.warning("users.multiple_linkable_email_rows", email=email, count=len(linkable))
+            return linkable[0]
+        raise ValueError(
+            "Account email is linked to another sign-in identity. Contact support."
+        )
 
     async def _maybe_promote_owner(self, user: User) -> User:
         settings = get_settings()
@@ -58,10 +91,10 @@ class UsersRepo:
             return await self._maybe_promote_owner(existing)
 
         if email:
-            email_stmt = select(User).where(func.lower(User.email) == email.lower())
-            linked = (await self._session.execute(email_stmt)).scalar_one_or_none()
-            if linked is not None and linked.supabase_user_id is None:
-                linked.supabase_user_id = supabase_user_id
+            linked = await self._linkable_user_by_email(email, supabase_user_id)
+            if linked is not None:
+                if linked.supabase_user_id is None:
+                    linked.supabase_user_id = supabase_user_id
                 if not linked.email:
                     linked.email = email
                 await self._session.commit()

@@ -9,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from tcgscan_api.config import get_settings
 from tcgscan_api.db.models import User, UserRole, UserTier
 from tcgscan_api.db.session import get_session
-from tcgscan_api.main import app
+from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.users import UsersRepo
 
@@ -19,11 +19,11 @@ async def api_client(sqlite_session: object) -> AsyncIterator[AsyncClient]:
     async def override_session() -> AsyncIterator[object]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
-    app.dependency_overrides.clear()
+    fastapi_app.dependency_overrides.clear()
 
 
 async def _make_user(

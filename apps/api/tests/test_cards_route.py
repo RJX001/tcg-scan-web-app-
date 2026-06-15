@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import Game
 from tcgscan_api.db.session import get_session
-from tcgscan_api.main import app
+from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.repositories.cards import CardsRepo
 
 
@@ -24,7 +24,7 @@ async def test_card_detail_route(sqlite_session: AsyncSession) -> None:
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session
 
-    app.dependency_overrides[get_session] = override_session
+    fastapi_app.dependency_overrides[get_session] = override_session
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -32,4 +32,4 @@ async def test_card_detail_route(sqlite_session: AsyncSession) -> None:
         assert r.status_code == 200
         assert r.json()["name"] == "Black Lotus"
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()

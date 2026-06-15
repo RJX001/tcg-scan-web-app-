@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-
+import structlog
 from fastapi import HTTPException, Request
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import User, UserRole, UserTier
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.users import UsersRepo
+
+log = structlog.get_logger()
 
 
 async def resolve_db_user(session: AsyncSession, request: Request) -> AuthUser:
@@ -16,9 +19,23 @@ async def resolve_db_user(session: AsyncSession, request: Request) -> AuthUser:
     principal = getattr(request.state, "user", None)
     if principal is None or not principal.supabase_user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
-    user = await UsersRepo(session).get_or_create(
-        supabase_user_id=principal.supabase_user_id, email=principal.email
-    )
+    try:
+        user = await UsersRepo(session).get_or_create(
+            supabase_user_id=principal.supabase_user_id, email=principal.email
+        )
+    except SQLAlchemyError as exc:
+        log.exception(
+            "auth.resolve_db_user.db_error",
+            supabase_user_id=principal.supabase_user_id,
+        )
+        raise HTTPException(status_code=503, detail="User account temporarily unavailable") from exc
+    except ValueError as exc:
+        log.warning(
+            "auth.resolve_db_user.invalid_state",
+            supabase_user_id=principal.supabase_user_id,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return AuthUser(
         id=user.id,
         supabase_user_id=user.supabase_user_id or principal.supabase_user_id,

@@ -208,6 +208,7 @@ export type AdminSystem = {
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const devAuthEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_ENABLED === "true";
 
 type TokenGetter = () => Promise<string | null>;
 
@@ -223,8 +224,10 @@ async function authHeaders(): Promise<HeadersInit> {
     const token = await _getToken();
     if (token) return { Authorization: `Bearer ${token}` };
   }
-  // Local dev fallback only — backend ignores this when ENVIRONMENT=production.
-  return { "X-Dev-User-Id": "dev-user" };
+  if (devAuthEnabled) {
+    return { "X-Dev-User-Id": "dev-user" };
+  }
+  return {};
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
-CORS_ALLOW_HEADERS = [
-    "Authorization",
-    "Content-Type",
-    "Accept",
-    "Origin",
-    "X-Requested-With",
-]
+from tcgscan_api.config import get_settings
+
+CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
 
 def parse_cors_origins(raw: str) -> list[str]:
@@ -24,3 +21,18 @@ def parse_cors_origins(raw: str) -> list[str]:
         seen.add(origin)
         origins.append(origin)
     return origins
+
+
+def cors_origins_from_settings() -> list[str]:
+    return parse_cors_origins(get_settings().cors_origins)
+
+
+def wrap_with_cors(fastapi_app: FastAPI, origins: list[str] | None = None) -> CORSMiddleware:
+    """Wrap the FastAPI app so all responses, including 401/403/500, get CORS headers."""
+    return CORSMiddleware(
+        fastapi_app,
+        allow_origins=origins or cors_origins_from_settings(),
+        allow_credentials=True,
+        allow_methods=CORS_ALLOW_METHODS,
+        allow_headers=["*"],
+    )
