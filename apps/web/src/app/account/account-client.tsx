@@ -1,71 +1,148 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
+import type { AccountOut } from "@tcgscan/sdk-ts";
 import { getAccount, openBillingPortal, startCheckout, updateAccountPreferences } from "@tcgscan/sdk-ts";
 import { useCallback, useEffect, useState } from "react";
 
+import { syncApiAuthFromSupabase } from "@/lib/auth/api-session";
+
+function subscriptionStatus(account: AccountOut): string | null {
+  const extended = account as AccountOut & { subscription_status?: string | null };
+  return extended.subscription_status ?? null;
+}
+
+function parseApiError(err: unknown): string {
+  if (!(err instanceof Error)) {
+    return "Request failed";
+  }
+  if (err.message.includes("API error 401")) {
+    return "Your session expired or the API rejected your sign-in. Try signing out and back in.";
+  }
+  return err.message;
+}
+
 export function AccountClient() {
-  const [account, setAccount] = useState<Awaited<ReturnType<typeof getAccount>> | null>(null);
+  const [account, setAccount] = useState<AccountOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
+  const ensureAuthToken = useCallback(async (): Promise<string | null> => {
+    const token = await syncApiAuthFromSupabase();
+    if (!token) {
+      window.location.assign("/sign-in?redirectedFrom=%2Faccount");
+      return null;
+    }
+    return token;
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
+      const token = await ensureAuthToken();
+      if (!token) {
+        return;
+      }
       setAccount(await getAccount());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load account");
+      setError(parseApiError(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [ensureAuthToken]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function upgrade() {
+    setError(null);
     try {
+      const token = await ensureAuthToken();
+      if (!token) {
+        return;
+      }
       const { url } = await startCheckout();
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Checkout unavailable — configure Stripe keys");
+      setError(parseApiError(e));
     }
   }
 
   async function manage() {
+    setError(null);
     try {
+      const token = await ensureAuthToken();
+      if (!token) {
+        return;
+      }
       const { url } = await openBillingPortal();
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Billing portal unavailable");
+      setError(parseApiError(e));
     }
   }
 
-  if (loading) return <p className="text-sm text-zinc-500">Loading account…</p>;
-  if (error && !account) return <p className="text-sm text-red-600">{error}</p>;
-  if (!account) return null;
+  if (loading) {
+    return <p className="text-sm text-zinc-500">Loading account…</p>;
+  }
+
+  if (!account) {
+    return (
+      <div className="space-y-3">
+        {error ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+            {error}
+          </p>
+        ) : (
+          <p className="text-sm text-zinc-500">Unable to load account details.</p>
+        )}
+      </div>
+    );
+  }
 
   const isPro = account.tier === "pro";
+  const status = subscriptionStatus(account);
 
   return (
     <div className="space-y-6">
+      {error ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">
+          {error}
+        </p>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Your plan</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {account.account_number && (
+          {account.email ? (
+            <p>
+              Email <span className="font-medium text-zinc-900">{account.email}</span>
+            </p>
+          ) : null}
+          {account.account_number ? (
             <p>
               Account{" "}
               <span className="font-mono font-semibold">#{account.account_number}</span>
             </p>
-          )}
+          ) : null}
           <p>
-            Current tier:{" "}
+            Role <span className="font-semibold">{account.role}</span>
+          </p>
+          <p>
+            Current tier{" "}
             <span className="font-semibold uppercase">{account.tier}</span>
           </p>
+          {status ? (
+            <p>
+              Subscription status{" "}
+              <span className="font-semibold capitalize">{status.replaceAll("_", " ")}</span>
+            </p>
+          ) : null}
           {!isPro && account.scans_per_day != null && (
             <p className="text-zinc-600">{account.scans_per_day} scans per day on Free</p>
           )}
@@ -77,7 +154,6 @@ export function AccountClient() {
           ) : (
             <Button onClick={() => void upgrade()}>Upgrade to Pro — $9.99/mo</Button>
           )}
-          {error && <p className="text-red-600">{error}</p>}
         </CardContent>
       </Card>
 
@@ -99,10 +175,21 @@ export function AccountClient() {
                 onChange={(e) => {
                   const comps_days = Number(e.target.value);
                   setSavingPrefs(true);
-                  void updateAccountPreferences({ comps_days })
-                    .then(setAccount)
+                  setError(null);
+                  void ensureAuthToken()
+                    .then((token) => {
+                      if (!token) {
+                        return null;
+                      }
+                      return updateAccountPreferences({ comps_days });
+                    })
+                    .then((next) => {
+                      if (next) {
+                        setAccount(next);
+                      }
+                    })
                     .catch((err: unknown) => {
-                      setError(err instanceof Error ? err.message : "Failed to save preference");
+                      setError(parseApiError(err));
                     })
                     .finally(() => setSavingPrefs(false));
                 }}
