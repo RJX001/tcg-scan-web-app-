@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { SignIn } from "@clerk/nextjs";
 
 export default function Page() {
-  redirect("https://accounts.cardchart.co.uk/sign-in");
+  return (
+    <main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
+      <SignIn />
+    </main>
+  );
 }
