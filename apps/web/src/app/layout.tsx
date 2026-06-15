@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { AdminNavLink } from "@/components/admin-nav-link";
 import { AuthBridge } from "@/components/auth-bridge";
 import { BottomNav } from "@/components/bottom-nav";
 import { DevBanner } from "@/components/dev-banner";
+import { NavAuth } from "@/components/nav-auth";
 import { PwaRegister } from "@/components/pwa-register";
 import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
 import "./globals.css";
@@ -91,17 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <AdminNavLink />
                   </li>
                   <li>
-                    <SignedOut>
-                      <Link
-                        href="/sign-in"
-                        className="rounded-full bg-blue-700 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
-                      >
-                        Sign in
-                      </Link>
-                    </SignedOut>
-                    <SignedIn>
-                      <UserButton />
-                    </SignedIn>
+                    <NavAuth variant="desktop" />
                   </li>
                 </ul>
               </nav>
@@ -113,14 +104,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
                 <div className="flex items-center gap-2">
                   <CurrencySelect />
-                  <SignedOut>
-                    <Link href="/sign-in" className="text-sm font-semibold text-blue-700">
-                      Sign in
-                    </Link>
-                  </SignedOut>
-                  <SignedIn>
-                    <UserButton />
-                  </SignedIn>
+                  <NavAuth variant="mobile" />
                   <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
                       <path
