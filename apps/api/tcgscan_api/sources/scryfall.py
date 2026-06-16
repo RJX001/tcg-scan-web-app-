@@ -31,10 +31,15 @@ def normalize_card(raw: dict[str, Any]) -> dict[str, Any] | None:
             "mana_cost": raw.get("mana_cost"),
             "cmc": raw.get("cmc"),
             "colors": raw.get("colors"),
+            "color_identity": raw.get("color_identity"),
             "oracle_text": raw.get("oracle_text"),
+            "oracle_id": raw.get("oracle_id"),
+            "legalities": raw.get("legalities"),
+            "prices": raw.get("prices"),
         },
         "external_ids": {
             "scryfall_id": str(raw["id"]),
+            "oracle_id": raw.get("oracle_id"),
             "tcgplayer_id": raw.get("tcgplayer_id"),
         },
     }
@@ -52,10 +57,10 @@ class ScryfallClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def iter_cards(self, *, limit: int) -> list[dict[str, Any]]:
+    async def iter_cards(self, *, limit: int | None = 100) -> list[dict[str, Any]]:
         url: str | None = "/cards/search?q=game%3Apaper&unique=cards&order=set"
         cards: list[dict[str, Any]] = []
-        while url and len(cards) < limit:
+        while url and (limit is None or len(cards) < limit):
             payload = await self._http.get_json(
                 url,
                 cache_key=f"source:scryfall:{url}:{limit}",
@@ -71,7 +76,7 @@ class ScryfallClient:
                 if normalized is None:
                     continue
                 cards.append(normalized)
-                if len(cards) >= limit:
+                if limit is not None and len(cards) >= limit:
                     break
             url = payload.get("next_page") if isinstance(payload, dict) and payload.get("has_more") else None
-        return cards[:limit]
+        return cards if limit is None else cards[:limit]

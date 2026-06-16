@@ -42,10 +42,18 @@ class Game(str, enum.Enum):
 
 
 class SourceRunStatus(str, enum.Enum):
+    queued = "queued"
     started = "started"
+    running = "running"
     success = "success"
     failed = "failed"
     partial = "partial"
+
+
+class SourceRunType(str, enum.Enum):
+    sample = "sample"
+    full = "full"
+    dry_run = "dry_run"
 
 
 class SaleKind(str, enum.Enum):
@@ -94,6 +102,8 @@ class SourceRun(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    game: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    run_type: Mapped[str] = mapped_column(String(32), nullable=False, default="sample", index=True)
     status: Mapped[SourceRunStatus] = mapped_column(
         Enum(SourceRunStatus, name="source_run_status", native_enum=False),
         nullable=False,

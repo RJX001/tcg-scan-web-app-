@@ -104,7 +104,7 @@ export function IndexesClient() {
         ))}
         {!loading && rows.length === 0 && !error && (
           <li className="px-4 py-10 text-center text-sm text-zinc-500">
-            No index data yet — run <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code>.
+            Market indexes will appear after price observations are collected.
           </li>
         )}
       </ul>

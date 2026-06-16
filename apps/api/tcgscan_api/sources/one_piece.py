@@ -88,6 +88,28 @@ class OnePieceClient:
     async def get_don_cards(self) -> list[dict[str, Any]]:
         return await self._get_list("/api/allDonCards/", cache_key="source:optcg:all_don_cards")
 
+    async def iter_all_cards(self, *, limit: int | None = None) -> list[dict[str, Any]]:
+        seen: set[str] = set()
+        cards: list[dict[str, Any]] = []
+        fetchers = [
+            self.get_all_set_cards,
+            self.get_starter_deck_cards,
+            self.get_promo_cards,
+            self.get_don_cards,
+        ]
+        for fetch in fetchers:
+            rows = await fetch()
+            for raw in rows:
+                normalized = normalize_card(raw)
+                sid = str(normalized.get("source_card_id") or "")
+                if not sid or sid in seen:
+                    continue
+                seen.add(sid)
+                cards.append(normalized)
+                if limit is not None and len(cards) >= limit:
+                    return cards
+        return cards
+
     async def diagnostic(self) -> dict[str, Any]:
         try:
             sets = await self.get_all_sets()

@@ -100,10 +100,13 @@ class CardsRepo:
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def upsert_catalog_batch(self, rows: Iterable[dict[str, object]]) -> tuple[int, int]:
+    async def upsert_catalog_batch(
+        self, rows: Iterable[dict[str, object]], *, commit_every: int = 500
+    ) -> tuple[int, int]:
         inserted = 0
         updated = 0
         now = datetime.now()
+        pending = 0
         for row in rows:
             game_val = row["game"]
             game = game_val if isinstance(game_val, Game) else Game(str(game_val))
@@ -125,7 +128,12 @@ class CardsRepo:
                         continue
                     setattr(existing, key, value)
                 updated += 1
-        await self._session.commit()
+            pending += 1
+            if commit_every > 0 and pending >= commit_every:
+                await self._session.commit()
+                pending = 0
+        if pending > 0:
+            await self._session.commit()
         return inserted, updated
 
     async def upsert_many(self, rows: Iterable[dict[str, object]]) -> int:

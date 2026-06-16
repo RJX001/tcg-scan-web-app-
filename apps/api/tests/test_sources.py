@@ -83,11 +83,11 @@ async def admin_headers(
 
 def test_ygopro_normalize_maps_fields() -> None:
     card = normalize_ygo(YGOPRO_SAMPLE["data"][0])
-    assert card["game"] == "yu_gi_oh"
+    assert card["game"] == "yugioh"
     assert card["source"] == "ygoprodeck"
     assert card["source_card_id"] == "46986414"
     assert card["name"] == "Dark Magician"
-    assert card["price_usd"] == "0.27"
+    assert card["metadata"]["card_prices"][0]["tcgplayer_price"] == "0.27"
 
 
 def test_one_piece_normalize_maps_fields() -> None:

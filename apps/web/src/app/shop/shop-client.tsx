@@ -304,11 +304,11 @@ export function ShopClient() {
         })}
         {!loading && rows.length === 0 && !error && (
           <li className="px-4 py-10 text-center text-sm text-zinc-500">
-            Live listings are ready after eBay ingest. Run eBay ingest from{" "}
-            <Link href="/admin/sources" className="font-medium text-blue-700 hover:underline">
-              Admin Sources
-            </Link>
-            .
+            Live marketplace listings are not enabled yet.{" "}
+            <Link href="/cards" className="font-medium text-blue-700 hover:underline">
+              Catalogue search
+            </Link>{" "}
+            is available.
           </li>
         )}
       </ul>

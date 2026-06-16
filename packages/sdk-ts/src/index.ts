@@ -294,6 +294,10 @@ export type AdminCatalogStat = {
   card_count: number;
   last_success_at?: string | null;
   last_run_id?: string | null;
+  last_sample_at?: string | null;
+  last_full_at?: string | null;
+  current_run_status?: string | null;
+  current_run_id?: string | null;
 };
 
 export type AdminIngestResult = {
@@ -563,6 +567,20 @@ export async function postAdminSourceIngest(
   if (opts?.query) params.set("query", opts.query);
   const qs = params.toString();
   return apiFetch<AdminIngestResult>(`/v1/admin/sources/ingest/${slug}${qs ? `?${qs}` : ""}`, {
+    method: "POST",
+  });
+}
+
+export async function postAdminSourceImport(
+  slug: string,
+  opts?: { limit?: number; dryRun?: boolean; force?: boolean },
+): Promise<AdminIngestResult> {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.dryRun) params.set("dry_run", "true");
+  if (opts?.force) params.set("force", "true");
+  const qs = params.toString();
+  return apiFetch<AdminIngestResult>(`/v1/admin/sources/import/${slug}${qs ? `?${qs}` : ""}`, {
     method: "POST",
   });
 }

@@ -30,6 +30,13 @@ OPTCG_CARD = {
 }
 
 
+def _mock_one_piece_endpoints() -> None:
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(200, json=[]))
+    respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
+
+
 @pytest_asyncio.fixture
 async def api_client(sqlite_session: object) -> AsyncIterator[AsyncClient]:
     async def override_session() -> AsyncIterator[object]:
@@ -73,7 +80,7 @@ def test_normalizer_handles_missing_optional_fields() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_ingest_dry_run_does_not_write_db(sqlite_session: object) -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    _mock_one_piece_endpoints()
     result = await run_catalogue_ingest(sqlite_session, "one_piece", limit=10, dry_run=True)
     assert result.dry_run is True
     assert result.inserted_count == 1
@@ -84,7 +91,7 @@ async def test_ingest_dry_run_does_not_write_db(sqlite_session: object) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_ingest_sample_upserts_cards(sqlite_session: object) -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    _mock_one_piece_endpoints()
     result = await run_catalogue_ingest(sqlite_session, "one_piece", limit=10, dry_run=False)
     assert result.status == "success"
     cards = await CardsRepo(sqlite_session).search(q="Perona", limit=5)
@@ -149,7 +156,7 @@ async def test_admin_ingest_requires_admin(api_client: AsyncClient, sqlite_sessi
 @pytest.mark.asyncio
 @respx.mock
 async def test_admin_ingest_one_piece(api_client: AsyncClient, admin_headers: dict[str, str]) -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    _mock_one_piece_endpoints()
     r = await api_client.post("/v1/admin/sources/ingest/one-piece", headers=admin_headers)
     assert r.status_code == 200
     body = r.json()

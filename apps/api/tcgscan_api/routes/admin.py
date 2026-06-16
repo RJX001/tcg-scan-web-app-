@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,8 @@ from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.cache import get_redis
 from tcgscan_api.services.qdrant import get_qdrant
 from tcgscan_api.services.roles import require_admin, require_owner, require_senior
-from tcgscan_api.services.catalogue_ingest import catalogue_stats, run_catalogue_ingest
+from tcgscan_api.services.catalogue_ingest import run_catalogue_ingest
+from tcgscan_api.services.catalogue_import import catalogue_stats, execute_full_catalogue_import, start_full_catalogue_import
 from tcgscan_api.services.ebay_ingest import ebay_listing_stats, run_ebay_ingest
 from tcgscan_api.services.source_audit import (
     build_sources_status,
@@ -269,6 +270,99 @@ async def admin_ingest_dragon_ball_masters(
     dry_run: bool = Query(default=False),
 ) -> dict[str, Any]:
     return await _run_ingest(request, session, "dragon_ball_masters", limit=limit, dry_run=dry_run)
+
+
+async def _run_import(
+    request: Request,
+    session: AsyncSession,
+    source_key: str,
+    *,
+    limit: int | None,
+    dry_run: bool,
+    force: bool,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    result = await start_full_catalogue_import(
+        session,
+        source_key,
+        limit=limit,
+        dry_run=dry_run,
+        force=force,
+    )
+    if not dry_run and result.status == "queued" and result.source_run_id:
+        background_tasks.add_task(
+            execute_full_catalogue_import,
+            uuid.UUID(result.source_run_id),
+            source_key,
+            limit=limit,
+            dry_run=False,
+        )
+    return {
+        "source_run_id": result.source_run_id,
+        "status": result.status,
+        "inserted_count": result.inserted_count,
+        "updated_count": result.updated_count,
+        "skipped_count": result.skipped_count,
+        "message": result.message,
+        "dry_run": result.dry_run,
+    }
+
+
+@router.post("/sources/import/pokemon")
+async def admin_import_pokemon(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+    limit: int | None = Query(default=None, ge=1, le=50000),
+    dry_run: bool = Query(default=False),
+    force: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_import(
+        request, session, "pokemon", limit=limit, dry_run=dry_run, force=force, background_tasks=background_tasks
+    )
+
+
+@router.post("/sources/import/scryfall")
+async def admin_import_scryfall(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+    limit: int | None = Query(default=None, ge=1, le=50000),
+    dry_run: bool = Query(default=False),
+    force: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_import(
+        request, session, "scryfall", limit=limit, dry_run=dry_run, force=force, background_tasks=background_tasks
+    )
+
+
+@router.post("/sources/import/ygopro")
+async def admin_import_ygopro(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+    limit: int | None = Query(default=None, ge=1, le=50000),
+    dry_run: bool = Query(default=False),
+    force: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_import(
+        request, session, "ygopro", limit=limit, dry_run=dry_run, force=force, background_tasks=background_tasks
+    )
+
+
+@router.post("/sources/import/one-piece")
+async def admin_import_one_piece(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+    limit: int | None = Query(default=None, ge=1, le=50000),
+    dry_run: bool = Query(default=False),
+    force: bool = Query(default=False),
+) -> dict[str, Any]:
+    return await _run_import(
+        request, session, "one_piece", limit=limit, dry_run=dry_run, force=force, background_tasks=background_tasks
+    )
 
 
 @router.post("/sources/ingest/ebay")

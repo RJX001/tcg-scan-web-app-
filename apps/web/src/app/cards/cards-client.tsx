@@ -7,6 +7,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+const PAGE_SIZE = 48;
+
 const GAMES = [
   { value: "", label: "All games" },
   { value: "pokemon", label: "Pokémon" },
@@ -37,29 +39,42 @@ export function CardsClient() {
   const [q, setQ] = useState("");
   const [game, setGame] = useState("");
   const [results, setResults] = useState<CardOut[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
-  const onSearch = useCallback(async () => {
-    if (!q.trim() && !game) return;
-    setLoading(true);
-    setError(null);
-    setSearched(true);
-    try {
-      const out = await searchCatalog({
-        q: q.trim() || undefined,
-        game: game || undefined,
-        limit: 48,
-      });
-      setResults(out);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Search failed");
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [q, game]);
+  const load = useCallback(
+    async (nextOffset: number, append: boolean) => {
+      if (!q.trim() && !game) return;
+      setLoading(true);
+      setError(null);
+      setSearched(true);
+      try {
+        const out = await searchCatalog({
+          q: q.trim() || undefined,
+          game: game || undefined,
+          limit: PAGE_SIZE,
+          offset: nextOffset,
+        });
+        setResults((prev) => (append ? [...prev, ...out] : out));
+        setOffset(nextOffset + out.length);
+        setHasMore(out.length === PAGE_SIZE);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Search failed");
+        if (!append) setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [q, game],
+  );
+
+  const onSearch = useCallback(() => {
+    setOffset(0);
+    void load(0, false);
+  }, [load]);
 
   return (
     <div className="space-y-6">
@@ -68,7 +83,7 @@ export function CardsClient() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void onSearch()}
+          onKeyDown={(e) => e.key === "Enter" && onSearch()}
           placeholder="Search by name, set, or number…"
           className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm"
         />
@@ -83,21 +98,21 @@ export function CardsClient() {
             </option>
           ))}
         </select>
-        <Button onClick={() => void onSearch()} disabled={loading || (!q.trim() && !game)}>
-          {loading ? "Searching…" : "Search"}
+        <Button onClick={onSearch} disabled={loading || (!q.trim() && !game)}>
+          {loading && !results.length ? "Searching…" : "Search"}
         </Button>
       </div>
 
       <p className="text-xs text-zinc-500">
-        Catalogue metadata only. Live marketplace pricing and listings are pending eBay/Cardmarket
-        approval.
+        Catalogue metadata from imported sources. Marketplace pricing appears when sold comp data is
+        available.
       </p>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {searched && !loading && results.length === 0 && !error ? (
         <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-10 text-center text-sm text-zinc-500">
-          No cards found. Try a different search or ask an admin to ingest catalogue samples from{" "}
+          No cards found. Try a different search or run a full catalogue import from{" "}
           <Link href="/admin/sources" className="text-blue-700 underline">
             Admin → Sources
           </Link>
@@ -124,10 +139,11 @@ export function CardsClient() {
                   )}
                 </div>
                 <div className="flex flex-1 flex-col gap-1 p-3">
+                  <p className="text-xs uppercase tracking-wide text-zinc-400">{card.game}</p>
                   <p className="line-clamp-2 font-medium leading-snug">{card.name}</p>
                   <p className="text-xs text-zinc-500">
                     {card.set_name ?? card.set_code}
-                    {card.card_number ? ` · ${card.card_number}` : ""}
+                    {card.card_number ? ` · ${card.card_number}` : card.number ? ` · ${card.number}` : ""}
                   </p>
                   {card.rarity ? (
                     <p className="text-xs uppercase tracking-wide text-zinc-400">{card.rarity}</p>
@@ -141,6 +157,14 @@ export function CardsClient() {
           );
         })}
       </ul>
+
+      {hasMore ? (
+        <div className="flex justify-center">
+          <Button variant="outline" disabled={loading} onClick={() => void load(offset, true)}>
+            {loading ? "Loading…" : "Load more"}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

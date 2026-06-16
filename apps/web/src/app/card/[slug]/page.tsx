@@ -137,8 +137,8 @@ export default async function CardDetailPage({ params }: Props) {
               <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:col-span-4">
                 <p className="text-sm font-medium text-amber-900">Live pricing unavailable</p>
                 <p className="mt-1 text-sm text-amber-800">
-                  Marketplace pricing is pending eBay/Cardmarket approval. Catalogue metadata is
-                  available; sold comps and listings will appear once marketplace sources are connected.
+                  Live pricing unavailable until marketplace/sold comp sources are connected.
+                  Catalogue metadata is shown below.
                 </p>
               </div>
             )}
@@ -222,6 +222,26 @@ export default async function CardDetailPage({ params }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {card.metadata && Object.keys(card.metadata).length > 0 ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Catalogue metadata</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid gap-2 text-sm sm:grid-cols-2">
+              {Object.entries(card.metadata).map(([key, value]) => (
+                <div key={key}>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">{key.replaceAll("_", " ")}</dt>
+                  <dd className="mt-0.5 break-words text-zinc-800">
+                    {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="mt-6">
         <CardHeader>

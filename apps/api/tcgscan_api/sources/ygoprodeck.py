@@ -19,41 +19,62 @@ def normalize_card(raw: dict[str, Any]) -> dict[str, Any]:
     first_image = images[0] if images else {}
     card_sets = raw.get("card_sets") or []
     first_set = card_sets[0] if card_sets else {}
-    card_prices = raw.get("card_prices") or [{}]
-    first_price = card_prices[0] if card_prices else {}
-
-    price_usd = first_price.get("tcgplayer_price") or first_price.get("amazon_price")
-    price_eur = first_price.get("cardmarket_price")
 
     return {
-        "game": "yu_gi_oh",
+        "game": "yugioh",
         "source": "ygoprodeck",
         "source_card_id": str(raw.get("id", "")),
         "name": raw.get("name"),
-        "card_type": raw.get("type"),
-        "race": raw.get("race"),
-        "attribute": raw.get("attribute"),
-        "archetype": raw.get("archetype"),
-        "level": raw.get("level"),
-        "rank": raw.get("rank"),
-        "linkval": raw.get("linkval"),
-        "atk": raw.get("atk"),
-        "def": raw.get("def"),
-        "description": raw.get("desc"),
         "set_code": first_set.get("set_code"),
         "set_name": first_set.get("set_name"),
+        "card_number": first_set.get("set_rarity_code") or first_set.get("set_code"),
         "rarity": first_set.get("set_rarity"),
         "image_url": first_image.get("image_url"),
-        "price_usd": price_usd,
-        "price_eur": price_eur,
+        "metadata": {
+            "card_type": raw.get("type"),
+            "race": raw.get("race"),
+            "attribute": raw.get("attribute"),
+            "archetype": raw.get("archetype"),
+            "level": raw.get("level"),
+            "rank": raw.get("rank"),
+            "linkval": raw.get("linkval"),
+            "atk": raw.get("atk"),
+            "def": raw.get("def"),
+            "description": raw.get("desc"),
+            "card_sets": card_sets,
+            "card_prices": raw.get("card_prices"),
+        },
+        "external_ids": {"ygoprodeck_id": str(raw.get("id", ""))},
     }
+
+
+def expand_card_sets(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    """Expand one YGO card into one row per set printing."""
+    base = normalize_card(raw)
+    card_id = raw.get("id")
+    sets = raw.get("card_sets") or []
+    if not sets:
+        return [base] if base.get("source_card_id") else []
+    rows: list[dict[str, Any]] = []
+    for card_set in sets:
+        if not isinstance(card_set, dict):
+            continue
+        row = dict(base)
+        set_code = card_set.get("set_code") or "unknown"
+        row["set_code"] = set_code
+        row["set_name"] = card_set.get("set_name")
+        row["rarity"] = card_set.get("set_rarity")
+        row["card_number"] = card_set.get("set_rarity_code") or set_code
+        row["source_card_id"] = f"{card_id}:{set_code}"
+        rows.append(row)
+    return rows
 
 
 class YgoProDeckClient:
     def __init__(self, *, base_url: str | None = None) -> None:
         url = (base_url or _base_url()).rstrip("/")
         self.base_url = url
-        self._http = SourceHttpClient(base_url=url, rate_per_sec=2.0, burst=4, timeout_s=30.0)
+        self._http = SourceHttpClient(base_url=url, rate_per_sec=2.0, burst=4, timeout_s=60.0)
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -66,6 +87,18 @@ class YgoProDeckClient:
         )
         data = payload.get("data") if isinstance(payload, dict) else payload
         return list(data or [])
+
+    async def iter_all_cards(self, *, limit: int | None = None) -> list[dict[str, Any]]:
+        cards = await self.get_all_cards()
+        normalized: list[dict[str, Any]] = []
+        for raw in cards:
+            if not isinstance(raw, dict):
+                continue
+            for row in expand_card_sets(raw):
+                normalized.append(row)
+                if limit is not None and len(normalized) >= limit:
+                    return normalized
+        return normalized
 
     async def search_card(self, name: str) -> list[dict[str, Any]]:
         payload = await self._http.get_json(

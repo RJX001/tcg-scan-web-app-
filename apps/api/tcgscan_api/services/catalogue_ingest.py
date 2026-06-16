@@ -19,7 +19,7 @@ from tcgscan_api.sources.dragon_ball_masters import DragonBallMastersClient
 from tcgscan_api.sources.one_piece import OnePieceClient, normalize_card as normalize_one_piece
 from tcgscan_api.sources.pokemon import PokemonClient
 from tcgscan_api.sources.scryfall import ScryfallClient
-from tcgscan_api.sources.ygoprodeck import YgoProDeckClient, normalize_card as normalize_ygo
+from tcgscan_api.sources.ygoprodeck import YgoProDeckClient
 
 log = structlog.get_logger()
 
@@ -55,33 +55,15 @@ async def _fetch_normalized(source_key: str, *, limit: int) -> tuple[list[dict[s
     if source_key == "ygopro":
         ygo_client = YgoProDeckClient()
         try:
-            cards = await ygo_client.search_card("a")
-            normalized: list[dict[str, Any]] = []
-            for raw in cards:
-                if len(normalized) >= limit:
-                    break
-                base = normalize_ygo(raw)
-                sets = raw.get("card_sets") or [{}]
-                for card_set in sets:
-                    if len(normalized) >= limit:
-                        break
-                    row = dict(base)
-                    set_code = card_set.get("set_code")
-                    row["set_code"] = set_code
-                    row["set_name"] = card_set.get("set_name")
-                    row["rarity"] = card_set.get("set_rarity")
-                    row["source_card_id"] = f"{raw.get('id')}:{set_code or 'unknown'}"
-                    row["card_number"] = set_code
-                    normalized.append(row)
-            return normalized, None
+            return (await ygo_client.iter_all_cards(limit=limit))[:limit], None
         finally:
             await ygo_client.aclose()
 
     if source_key == "one_piece":
         op_client = OnePieceClient()
         try:
-            rows = await op_client.get_all_set_cards()
-            return [normalize_one_piece(raw) for raw in rows[:limit]], None
+            rows = await op_client.iter_all_cards(limit=limit)
+            return rows[:limit] if limit else rows, None
         finally:
             await op_client.aclose()
 
@@ -117,7 +99,18 @@ async def run_catalogue_ingest(
 ) -> IngestResult:
     limit = max(1, min(limit, 5000))
     runs = SourceRunsRepo(session)
-    run = await runs.start(source_key, dry_run=dry_run)
+    game_map = {
+        "pokemon": "pokemon",
+        "scryfall": "mtg",
+        "ygopro": "yugioh",
+        "one_piece": "one_piece",
+    }
+    run = await runs.start(
+        source_key,
+        dry_run=dry_run,
+        game=game_map.get(source_key),
+        run_type="dry_run" if dry_run else "sample",
+    )
     started_at = run.started_at or datetime.now()
     inserted = 0
     updated = 0

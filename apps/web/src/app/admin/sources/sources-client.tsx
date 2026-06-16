@@ -2,7 +2,7 @@
 
 import { Button, Card, CardContent } from "@tcgscan/ui";
 import type { AdminIngestResult, AdminSourceDiagnostic, AdminSourcesStatus, AccountOut } from "@tcgscan/sdk-ts";
-import { getAdminSourceTest, getAdminSourcesStatus, getMe, postAdminSourceIngest } from "@tcgscan/sdk-ts";
+import { getAdminSourceTest, getAdminSourcesStatus, getMe, postAdminSourceImport, postAdminSourceIngest } from "@tcgscan/sdk-ts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
@@ -15,14 +15,15 @@ type SourceRow = {
   provider: string;
   testSlug: string;
   ingestSlug?: string;
+  importSlug?: string;
   group: "catalog" | "pricing" | "trends";
 };
 
 const SOURCE_ROWS: SourceRow[] = [
-  { id: "pokemon", label: "Pokémon", provider: "pokemontcg.io", testSlug: "pokemon", ingestSlug: "pokemon", group: "catalog" },
-  { id: "scryfall", label: "MTG / Scryfall", provider: "Scryfall", testSlug: "scryfall", ingestSlug: "scryfall", group: "catalog" },
-  { id: "yugioh", label: "Yu-Gi-Oh / YGOPRODeck", provider: "YGOPRODeck", testSlug: "ygopro", ingestSlug: "ygopro", group: "catalog" },
-  { id: "one_piece", label: "One Piece / OPTCG API", provider: "optcgapi", testSlug: "one-piece", ingestSlug: "one-piece", group: "catalog" },
+  { id: "pokemon", label: "Pokémon", provider: "pokemontcg.io", testSlug: "pokemon", ingestSlug: "pokemon", importSlug: "pokemon", group: "catalog" },
+  { id: "scryfall", label: "MTG / Scryfall", provider: "Scryfall", testSlug: "scryfall", ingestSlug: "scryfall", importSlug: "scryfall", group: "catalog" },
+  { id: "yugioh", label: "Yu-Gi-Oh / YGOPRODeck", provider: "YGOPRODeck", testSlug: "ygopro", ingestSlug: "ygopro", importSlug: "ygopro", group: "catalog" },
+  { id: "one_piece", label: "One Piece / OPTCG API", provider: "optcgapi", testSlug: "one-piece", ingestSlug: "one-piece", importSlug: "one-piece", group: "catalog" },
   {
     id: "dragon_ball_fw",
     label: "Dragon Ball Fusion World / Bandai",
@@ -54,6 +55,8 @@ function statusBadge(status: DiagnosticStatus | "unknown" | "idle") {
     pending_approval: "bg-sky-100 text-sky-900",
     not_implemented: "bg-zinc-100 text-zinc-700",
     failed: "bg-red-100 text-red-800",
+    running: "bg-blue-100 text-blue-900",
+    queued: "bg-indigo-100 text-indigo-900",
     unknown: "bg-zinc-100 text-zinc-600",
     idle: "bg-zinc-100 text-zinc-500",
   };
@@ -91,6 +94,7 @@ export function AdminSourcesClient() {
   const [diagnostics, setDiagnostics] = useState<Record<string, AdminSourceDiagnostic>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
   const [ingestingId, setIngestingId] = useState<string | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [ingestResults, setIngestResults] = useState<Record<string, AdminIngestResult>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -208,6 +212,21 @@ export function AdminSourcesClient() {
     }
   }
 
+  async function runImport(row: SourceRow) {
+    if (!row.importSlug) return;
+    setImportingId(row.id);
+    setError(null);
+    try {
+      const result = await postAdminSourceImport(row.importSlug);
+      setIngestResults((prev) => ({ ...prev, [row.id]: result }));
+      setStatusPayload(await getAdminSourcesStatus());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImportingId(null);
+    }
+  }
+
   async function runIngest(row: SourceRow) {
     if (!row.ingestSlug) return;
     setIngestingId(row.id);
@@ -302,8 +321,10 @@ export function AdminSourcesClient() {
             <thead>
               <tr className="border-b text-xs uppercase text-zinc-500">
                 <th className="pb-2 pr-4">Source</th>
-                <th className="pb-2 pr-4">Listings</th>
-                <th className="pb-2 pr-4">Last ingest</th>
+                <th className="pb-2 pr-4">Count</th>
+                <th className="pb-2 pr-4">Last sample</th>
+                <th className="pb-2 pr-4">Last full</th>
+                <th className="pb-2 pr-4">Run</th>
                 <th className="pb-2 pr-4">Config</th>
                 <th className="pb-2 pr-4">Live test</th>
                 <th className="pb-2 pr-4">Message</th>
@@ -325,10 +346,12 @@ export function AdminSourcesClient() {
                     : stat?.card_count != null
                       ? stat.card_count.toLocaleString()
                       : "—";
-                const lastIngest =
+                const lastSample =
                   row.id === "ebay"
                     ? pricingStat?.last_success_at
-                    : stat?.last_success_at;
+                    : stat?.last_sample_at ?? stat?.last_success_at;
+                const lastFull = row.id === "ebay" ? null : stat?.last_full_at;
+                const runStatus = row.id === "ebay" ? null : stat?.current_run_status;
                 return (
                   <tr key={row.id} className="border-b border-zinc-100 align-top">
                     <td className="py-3 pr-4">
@@ -337,7 +360,13 @@ export function AdminSourcesClient() {
                     </td>
                     <td className="py-3 pr-4 tabular-nums">{countLabel}</td>
                     <td className="py-3 pr-4 text-xs text-zinc-600">
-                      {lastIngest ? new Date(lastIngest).toLocaleString() : "Never"}
+                      {lastSample ? new Date(lastSample).toLocaleString() : "Never"}
+                    </td>
+                    <td className="py-3 pr-4 text-xs text-zinc-600">
+                      {row.id === "ebay" ? "—" : lastFull ? new Date(lastFull).toLocaleString() : "Never"}
+                    </td>
+                    <td className="py-3 pr-4 text-xs text-zinc-600">
+                      {runStatus ? statusBadge(runStatus as DiagnosticStatus) : "—"}
                     </td>
                     <td className="py-3 pr-4">{statusBadge(configStatus)}</td>
                     <td className="py-3 pr-4">
@@ -347,6 +376,11 @@ export function AdminSourcesClient() {
                       {diag ? (
                         <div className="space-y-1">
                           <p>{diag.message}</p>
+                          {row.id === "ebay" ? (
+                            <p className="text-xs text-zinc-500">
+                              Connected for Browse API. Listing ingest optional.
+                            </p>
+                          ) : null}
                           {diag.sample_card_name ? (
                             <p className="text-xs">
                               Sample: {diag.sample_card_name}
@@ -385,6 +419,16 @@ export function AdminSourcesClient() {
                             onClick={() => void runIngest(row)}
                           >
                             {ingestingId === row.id ? "Ingesting…" : "Ingest sample"}
+                          </Button>
+                        ) : null}
+                        {row.importSlug ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={importingId === row.id}
+                            onClick={() => void runImport(row)}
+                          >
+                            {importingId === row.id ? "Importing…" : "Import full"}
                           </Button>
                         ) : null}
                       </div>

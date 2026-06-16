@@ -37,6 +37,8 @@ def normalize_card(raw: dict[str, Any]) -> dict[str, Any] | None:
             "types": raw.get("types"),
             "artist": raw.get("artist"),
             "legalities": raw.get("legalities"),
+            "tcgplayer": raw.get("tcgplayer"),
+            "cardmarket": raw.get("cardmarket"),
         },
         "external_ids": {"pokemontcg_id": str(raw["id"])},
     }
@@ -54,11 +56,11 @@ class PokemonClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def iter_cards(self, *, limit: int) -> list[dict[str, Any]]:
+    async def iter_cards(self, *, limit: int | None = 100) -> list[dict[str, Any]]:
         page = 1
-        page_size = min(limit, 250)
+        page_size = 250 if limit is None or limit > 250 else min(limit, 250)
         cards: list[dict[str, Any]] = []
-        while len(cards) < limit:
+        while limit is None or len(cards) < limit:
             payload = await self._http.get_json(
                 "/cards",
                 params={"page": page, "pageSize": page_size},
@@ -75,9 +77,9 @@ class PokemonClient:
                 if normalized is None:
                     continue
                 cards.append(normalized)
-                if len(cards) >= limit:
+                if limit is not None and len(cards) >= limit:
                     break
             if len(data) < page_size:
                 break
             page += 1
-        return cards[:limit]
+        return cards if limit is None else cards[:limit]
