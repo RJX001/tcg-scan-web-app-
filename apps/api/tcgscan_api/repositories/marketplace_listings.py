@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import DBAPIError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import MarketplaceListing
@@ -78,7 +79,11 @@ class MarketplaceListingsRepo:
         )
         if source:
             stmt = stmt.where(MarketplaceListing.source == source)
-        return int((await self._session.execute(stmt)).scalar_one())
+        try:
+            return int((await self._session.execute(stmt)).scalar_one())
+        except (ProgrammingError, DBAPIError, SQLAlchemyError):
+            await self._session.rollback()
+            return 0
 
     async def browse(
         self,

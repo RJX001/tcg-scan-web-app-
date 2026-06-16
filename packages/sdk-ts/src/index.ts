@@ -277,6 +277,7 @@ export type AdminSourcesStatus = {
   catalog_sources: AdminCatalogSourceStatus[];
   catalog_stats?: AdminCatalogStat[];
   pricing_stats?: AdminPricingStat[];
+  status_warnings?: string[];
   vercel_env_required: string[];
   worker_service_required: boolean;
 };

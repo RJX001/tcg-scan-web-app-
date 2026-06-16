@@ -20,11 +20,11 @@ from tcgscan_api.services.auth_ctx import resolve_db_user
 from tcgscan_api.services.cache import get_redis
 from tcgscan_api.services.qdrant import get_qdrant
 from tcgscan_api.services.roles import require_admin, require_owner, require_senior
+from tcgscan_api.services.admin_sources_status import get_admin_sources_status
 from tcgscan_api.services.catalogue_ingest import run_catalogue_ingest
-from tcgscan_api.services.catalogue_import import catalogue_stats, execute_full_catalogue_import, start_full_catalogue_import
-from tcgscan_api.services.ebay_ingest import ebay_listing_stats, run_ebay_ingest
+from tcgscan_api.services.catalogue_import import execute_full_catalogue_import, start_full_catalogue_import
+from tcgscan_api.services.ebay_ingest import run_ebay_ingest
 from tcgscan_api.services.source_audit import (
-    build_sources_status,
     test_cardmarket_connection,
     test_dragon_ball_fusion_world_connection,
     test_dragon_ball_masters_connection,
@@ -184,11 +184,7 @@ async def admin_sources_status(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     await _admin_user(request, session)
-    data_health = await AdminRepo(session).data_health()
-    payload = build_sources_status(data_health)
-    payload.update(await catalogue_stats(session))
-    payload.update(await ebay_listing_stats(session))
-    return payload
+    return await get_admin_sources_status(session)
 
 
 async def _run_ingest(

@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import CardIdentity, SourceRun, SourceRunStatus
@@ -90,6 +91,10 @@ class SourceRunsRepo:
     async def get(self, run_id: uuid.UUID) -> SourceRun | None:
         return await self._session.get(SourceRun, run_id)
 
+    async def _rollback_on_db_error(self, exc: Exception) -> None:
+        if isinstance(exc, (ProgrammingError, DBAPIError, SQLAlchemyError)):
+            await self._session.rollback()
+
     async def last_success(self, source_key: str, *, run_type: str | None = None) -> SourceRun | None:
         stmt = select(SourceRun).where(
             SourceRun.source_key == source_key,
@@ -98,7 +103,13 @@ class SourceRunsRepo:
         if run_type:
             stmt = stmt.where(SourceRun.run_type == run_type)
         stmt = stmt.order_by(SourceRun.finished_at.desc()).limit(1)
-        return (await self._session.execute(stmt)).scalar_one_or_none()
+        try:
+            return (await self._session.execute(stmt)).scalar_one_or_none()
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            if run_type:
+                return await self.last_success(source_key)
+            return None
 
     async def active_run(self, source_key: str) -> SourceRun | None:
         stmt = (
@@ -112,11 +123,19 @@ class SourceRunsRepo:
             .order_by(SourceRun.started_at.desc())
             .limit(1)
         )
-        return (await self._session.execute(stmt)).scalar_one_or_none()
+        try:
+            return (await self._session.execute(stmt)).scalar_one_or_none()
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            return None
 
     async def count_cards_by_source(self, source: str) -> int:
         stmt = select(func.count()).select_from(CardIdentity).where(CardIdentity.source == source)
-        return int((await self._session.execute(stmt)).scalar_one())
+        try:
+            return int((await self._session.execute(stmt)).scalar_one())
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            return 0
 
     async def count_cards_by_game(self, game: str) -> int:
         stmt = select(func.count()).select_from(CardIdentity).where(CardIdentity.game == game)

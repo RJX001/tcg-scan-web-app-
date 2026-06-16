@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { isAdminRole } from "@/lib/auth/admin-access";
+import { resolveStatusLoadError } from "@/lib/admin-sources-access";
 import { syncApiAuthFromSupabase } from "@/lib/auth/api-session";
 
 type SourceRow = {
@@ -178,13 +179,20 @@ export function AdminSourcesClient() {
       setAccess("ready");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to load source diagnostics";
-      if (message.includes("API error 401")) {
+      const resolved = resolveStatusLoadError(message);
+      if (resolved.shouldRedirect) {
         setAccess("unauthenticated");
         window.location.assign("/sign-in?redirectedFrom=%2Fadmin%2Fsources");
         return;
       }
+      if (resolved.access === "forbidden") {
+        setAccess("forbidden");
+        setError(message);
+        return;
+      }
       setError(message);
-      setAccess("forbidden");
+      setStatusPayload(null);
+      setAccess("ready");
     }
   }, []);
 
@@ -304,7 +312,17 @@ export function AdminSourcesClient() {
         </Link>
       </div>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Source status could not be loaded fully. You can still run per-source tests below. {error}
+        </p>
+      ) : null}
+      {statusPayload?.status_warnings?.length ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Some status metrics are unavailable ({statusPayload.status_warnings.join(", ")}). Run database
+          migrations if this persists.
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="pt-6">
