@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     ebay_app_id: str | None = Field(default=None, alias="EBAY_APP_ID")
     ebay_cert_id: str | None = Field(default=None, alias="EBAY_CERT_ID")
     ebay_marketplace_id: str = Field(default="EBAY_GB", alias="EBAY_MARKETPLACE_ID")
+    ebay_account_deletion_verification_token: str | None = Field(
+        default=None, alias="EBAY_ACCOUNT_DELETION_VERIFICATION_TOKEN"
+    )
+    ebay_account_deletion_endpoint_url: str = Field(
+        default="https://tcg-scan-web-app-production.up.railway.app/v1/ebay/account-deletion",
+        alias="EBAY_ACCOUNT_DELETION_ENDPOINT_URL",
+    )
     tcg_api_key: str | None = Field(default=None, alias="TCG_API_KEY")
     apify_token: str | None = Field(default=None, alias="APIFY_TOKEN")
 

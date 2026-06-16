@@ -32,6 +32,8 @@ Background jobs use **Temporal workflows**, not Celery (`apps/worker/tcgscan_wor
 |----------|----------|-----|
 | **High** | `EBAY_APP_ID` + `EBAY_CERT_ID` | eBay OAuth (or `EBAY_OAUTH_TOKEN` instead) |
 | **High** | `EBAY_MARKETPLACE_ID` | `EBAY_GB` (default) |
+| **High** | `EBAY_ACCOUNT_DELETION_VERIFICATION_TOKEN` | Marketplace Account Deletion compliance (enables production keyset) |
+| **Optional** | `EBAY_ACCOUNT_DELETION_ENDPOINT_URL` | Default `https://tcg-scan-web-app-production.up.railway.app/v1/ebay/account-deletion` |
 | **Recommended** | `EBAY_INSIGHTS_TOKEN` | Real sold comps (without it, sold ingest uses Browse fallback) |
 | **Optional** | `POKEMONTCG_API_KEY` | Higher pokemontcg.io rate limits |
 | **Medium** | `TCG_API_KEY` | TCGPlayer prices via tcgapi.dev |
@@ -95,16 +97,21 @@ Existing: `GET /v1/admin/data-health` — row counts + freshness per `sale_event
 
 | Item | Detail |
 |------|--------|
-| **Status** | **Pending approval** — worker coded; production ingest not enabled |
-| **Files** | `worker/sources/ebay_auth.py`, `ebay_active.py`, `ebay_sold.py`, `workflows/ebay_workflow.py` |
+| **Status** | **Pending approval** — worker coded; production keyset disabled until Account Deletion endpoint verified |
+| **Files** | `worker/sources/ebay_auth.py`, `ebay_active.py`, `ebay_sold.py`, `routes/ebay.py`, `services/ebay_account_deletion.py` |
+| **Compliance** | **Marketplace Account Deletion** — public endpoint required to enable production keyset |
+| **Endpoint URL** | `https://tcg-scan-web-app-production.up.railway.app/v1/ebay/account-deletion` |
+| **Railway vars** | `EBAY_ACCOUNT_DELETION_VERIFICATION_TOKEN` (e.g. `CardChartProduction_2026_Verify_Token`); optional `EBAY_ACCOUNT_DELETION_ENDPOINT_URL` |
+| **GET challenge** | `GET /v1/ebay/account-deletion?challenge_code=...` → `{"challengeResponse":"<sha256_hex>"}` where digest = SHA256(`challenge_code` + token + endpoint URL) |
+| **POST notification** | `POST /v1/ebay/account-deletion` — logs safe metadata only; returns 204; no auth required |
 | **API reads** | `GET /v1/cards/{id}/comps`, `/listings`, `/sources`; `GET /v1/market/sales`, `/listings` |
-| **Railway vars** | `EBAY_OAUTH_TOKEN` **or** `EBAY_APP_ID` + `EBAY_CERT_ID`; `EBAY_INSIGHTS_TOKEN`; `EBAY_MARKETPLACE_ID` |
+| **Browse Railway vars** | `EBAY_OAUTH_TOKEN` **or** `EBAY_APP_ID` + `EBAY_CERT_ID`; `EBAY_INSIGHTS_TOKEN`; `EBAY_MARKETPLACE_ID` |
 | **Code does NOT read** | `EBAY_DEV_ID`, `EBAY_CLIENT_SECRET`, `EBAY_AFFILIATE_*` |
 | **Vercel vars** | None |
 | **Provides** | Active listings (`kind=listing`), sold comps (`kind=sold`), raw `itemWebUrl` |
 | **Rate limit** | `ResilientClient` 5 req/s burst 10; OAuth token cached |
 | **Caching** | Postgres `sale_event`; Temporal 15m active / hourly sold |
-| **Test** | `GET /v1/admin/sources/test/ebay`; `uv run pytest apps/worker/tests/test_sources.py -q` |
+| **Test** | `uv run pytest apps/api/tests/test_ebay_account_deletion.py -q`; `GET /v1/admin/sources/test/ebay` |
 | **CLI** | `pnpm ingest:pricing -- --source ebay_active` or `ebay_sold` |
 | **Missing key** | Source skipped in ingest; search URLs still work from API |
 | **Gap** | **Never affiliate-tag outbound links** (product rule violated today); sold without Insights uses Browse active (not true sold data) |

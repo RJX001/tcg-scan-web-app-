@@ -13,6 +13,7 @@ from tcgscan_api.routes import (
     admin,
     billing,
     cards,
+    ebay,
     health,
     insights,
     market,
@@ -80,6 +81,7 @@ async def unhandled_exception_handler(_req: Request, exc: Exception) -> JSONResp
 
 
 fastapi_app.include_router(health.router, prefix="/v1")
+fastapi_app.include_router(ebay.router, prefix="/v1")
 fastapi_app.include_router(cards.router, prefix="/v1")
 fastapi_app.include_router(scan.router, prefix="/v1")
 fastapi_app.include_router(portfolio.router, prefix="/v1")
