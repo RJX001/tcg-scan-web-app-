@@ -51,10 +51,15 @@ function toIsoDate(d: string, endOfDay: boolean): string | undefined {
 }
 
 function thumb(listing: ShopListingOut): string | null {
-  const urls = listing.card.image_urls;
+  if (listing.image_url) return listing.image_url;
+  const urls = listing.card?.image_urls;
   if (!urls) return null;
   const src = urls.small ?? urls.front ?? urls.hires;
   return typeof src === "string" ? src : null;
+}
+
+function listingTitle(listing: ShopListingOut): string {
+  return listing.card?.name ?? listing.title ?? "Listing";
 }
 
 export function ShopClient() {
@@ -242,12 +247,13 @@ export function ShopClient() {
       <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
         {rows.map((l, i) => {
           const img = thumb(l);
+          const title = listingTitle(l);
           return (
-            <li key={`${l.listing_url ?? l.card.id}-${i}`} className="flex items-center gap-3 px-4 py-3">
+            <li key={`${l.listing_url ?? l.title ?? i}`} className="flex items-center gap-3 px-4 py-3">
               {img ? (
                 <Image
                   src={img}
-                  alt={l.card.name}
+                  alt={title}
                   width={40}
                   height={56}
                   className="shrink-0 rounded border border-zinc-200 object-cover"
@@ -259,18 +265,24 @@ export function ShopClient() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
                   {l.source}
                 </p>
-                <Link
-                  href={`/card/${l.card.slug}`}
-                  className="block truncate font-medium hover:text-blue-700"
-                >
-                  {l.card.name}
-                  {l.card.number ? <span className="text-zinc-400"> #{l.card.number}</span> : null}
-                </Link>
+                {l.card?.slug ? (
+                  <Link
+                    href={`/card/${l.card.slug}`}
+                    className="block truncate font-medium hover:text-blue-700"
+                  >
+                    {title}
+                    {l.card.number ? <span className="text-zinc-400"> #{l.card.number}</span> : null}
+                  </Link>
+                ) : (
+                  <p className="truncate font-medium">{title}</p>
+                )}
                 <div className="mt-0.5 flex items-center gap-2">
                   <GradeBadge grade={l.grade} />
-                  <span className="truncate text-xs text-zinc-500">
-                    {l.card.set_name ?? l.card.set_code}
-                  </span>
+                  {l.card ? (
+                    <span className="truncate text-xs text-zinc-500">
+                      {l.card.set_name ?? l.card.set_code}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="shrink-0 text-right">
@@ -292,9 +304,9 @@ export function ShopClient() {
         })}
         {!loading && rows.length === 0 && !error && (
           <li className="px-4 py-10 text-center text-sm text-zinc-500">
-            Live marketplace listings are pending eBay/Cardmarket approval. You can still search the{" "}
-            <Link href="/cards" className="font-medium text-blue-700 hover:underline">
-              card catalogue
+            Live listings are ready after eBay ingest. Run eBay ingest from{" "}
+            <Link href="/admin/sources" className="font-medium text-blue-700 hover:underline">
+              Admin Sources
             </Link>
             .
           </li>

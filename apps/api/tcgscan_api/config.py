@@ -43,7 +43,10 @@ class Settings(BaseSettings):
 
     ebay_app_id: str | None = Field(default=None, alias="EBAY_APP_ID")
     ebay_cert_id: str | None = Field(default=None, alias="EBAY_CERT_ID")
+    ebay_oauth_token: str | None = Field(default=None, alias="EBAY_OAUTH_TOKEN")
     ebay_marketplace_id: str = Field(default="EBAY_GB", alias="EBAY_MARKETPLACE_ID")
+    ebay_affiliate_tracking_id: str | None = Field(default=None, alias="EBAY_AFFILIATE_TRACKING_ID")
+    ebay_affiliate_campaign_id: str | None = Field(default=None, alias="EBAY_AFFILIATE_CAMPAIGN_ID")
     ebay_account_deletion_verification_token: str | None = Field(
         default=None, alias="EBAY_ACCOUNT_DELETION_VERIFICATION_TOKEN"
     )

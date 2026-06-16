@@ -110,7 +110,7 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
         {
             "id": "ebay",
             "type": "pricing",
-            "implementation": "pending_approval",
+            "implementation": "connected" if _ebay_configured() else "missing",
             "configured": _ebay_configured(),
             "env": _env_flags(
                 [
@@ -129,11 +129,11 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
                 "apps/worker/tcgscan_worker/sources/ebay_sold.py",
             ],
             "ingest_jobs": ["EbayActiveWorkflow (15m)", "EbaySoldWorkflow (hourly)"],
-            "ingest_command": "pnpm ingest:pricing -- --source ebay_active|ebay_sold",
+            "ingest_command": "POST /v1/admin/sources/ingest/ebay (admin sample ingest)",
             "data_health": health_by_source.get("ebay"),
             "notes": (
-                "Official Browse API coded in worker; production ingest pending approval. "
-                "EPN affiliate tagging not implemented."
+                "Official Browse API for active listings. Sold comps via Insights remain separate. "
+                "EPN affiliate tagging applied when EBAY_AFFILIATE_* env vars are set."
             ),
         },
         _pricing(

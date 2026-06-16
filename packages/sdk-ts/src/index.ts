@@ -276,8 +276,16 @@ export type AdminSourcesStatus = {
   pricing_sources: AdminPricingSourceStatus[];
   catalog_sources: AdminCatalogSourceStatus[];
   catalog_stats?: AdminCatalogStat[];
+  pricing_stats?: AdminPricingStat[];
   vercel_env_required: string[];
   worker_service_required: boolean;
+};
+
+export type AdminPricingStat = {
+  source_key: string;
+  listing_count: number;
+  last_success_at?: string | null;
+  last_run_id?: string | null;
 };
 
 export type AdminCatalogStat = {
@@ -547,11 +555,12 @@ export async function getAdminSourceTest(slug: string): Promise<AdminSourceDiagn
 
 export async function postAdminSourceIngest(
   slug: string,
-  opts?: { limit?: number; dryRun?: boolean },
+  opts?: { limit?: number; dryRun?: boolean; query?: string },
 ): Promise<AdminIngestResult> {
   const params = new URLSearchParams();
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.dryRun) params.set("dry_run", "true");
+  if (opts?.query) params.set("query", opts.query);
   const qs = params.toString();
   return apiFetch<AdminIngestResult>(`/v1/admin/sources/ingest/${slug}${qs ? `?${qs}` : ""}`, {
     method: "POST",
@@ -643,7 +652,9 @@ export type SaleBrowseOut = {
 };
 
 export type ShopListingOut = {
-  card: CardOut;
+  card?: CardOut | null;
+  title?: string | null;
+  image_url?: string | null;
   source: string;
   price: number;
   currency: string;

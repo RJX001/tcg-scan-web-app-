@@ -21,6 +21,7 @@ from tcgscan_api.services.cache import get_redis
 from tcgscan_api.services.qdrant import get_qdrant
 from tcgscan_api.services.roles import require_admin, require_owner, require_senior
 from tcgscan_api.services.catalogue_ingest import catalogue_stats, run_catalogue_ingest
+from tcgscan_api.services.ebay_ingest import ebay_listing_stats, run_ebay_ingest
 from tcgscan_api.services.source_audit import (
     build_sources_status,
     test_cardmarket_connection,
@@ -185,6 +186,7 @@ async def admin_sources_status(
     data_health = await AdminRepo(session).data_health()
     payload = build_sources_status(data_health)
     payload.update(await catalogue_stats(session))
+    payload.update(await ebay_listing_stats(session))
     return payload
 
 
@@ -267,6 +269,27 @@ async def admin_ingest_dragon_ball_masters(
     dry_run: bool = Query(default=False),
 ) -> dict[str, Any]:
     return await _run_ingest(request, session, "dragon_ball_masters", limit=limit, dry_run=dry_run)
+
+
+@router.post("/sources/ingest/ebay")
+async def admin_ingest_ebay(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    query: str = Query(default="pokemon card charizard", max_length=200),
+    limit: int = Query(default=25, ge=1, le=100),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    await _admin_user(request, session)
+    result = await run_ebay_ingest(session, query=query, limit=limit, dry_run=dry_run)
+    return {
+        "source_run_id": result.source_run_id,
+        "status": result.status,
+        "inserted_count": result.inserted_count,
+        "updated_count": result.updated_count,
+        "skipped_count": result.skipped_count,
+        "message": result.message,
+        "dry_run": result.dry_run,
+    }
 
 
 @router.get("/sources/test/ebay")

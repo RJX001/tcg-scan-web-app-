@@ -9,7 +9,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tcgscan_api.db.models import CardPriceDaily, Game, SaleKind
+from tcgscan_api.db.models import CardPriceDaily, Game, MarketplaceListing, SaleKind
 from tcgscan_api.db.session import get_session
 from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.repositories.cards import CardsRepo
@@ -224,6 +224,33 @@ async def test_browse_listings(sqlite_session: AsyncSession) -> None:
 
     by_name = await repo.browse_listings(q="pika")
     assert len(by_name) == 1 and by_name[0].card.id == pika_id
+
+    sqlite_session.add_all(
+        [
+            MarketplaceListing(
+                source="ebay",
+                source_listing_id="shop-zard",
+                title="Charizard shop listing",
+                price=Decimal("250.00"),
+                currency="USD",
+                item_url="https://ebay.com/itm/shop-1",
+                grade="PSA 9",
+                card_id=zard_id,
+                listing_status="active",
+            ),
+            MarketplaceListing(
+                source="tcgplayer",
+                source_listing_id="shop-pika",
+                title="Pikachu shop listing",
+                price=Decimal("6.00"),
+                currency="USD",
+                item_url="https://tcgplayer.com/shop-2",
+                card_id=pika_id,
+                listing_status="active",
+            ),
+        ]
+    )
+    await sqlite_session.commit()
 
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield sqlite_session

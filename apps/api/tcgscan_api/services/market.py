@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.repositories.market import MarketRepo, PopulationRepo
+from tcgscan_api.repositories.marketplace_listings import MarketplaceListingsRepo
 from tcgscan_api.services.cards import CardOut, _to_out
 
 SORT_OPTIONS = ("change", "change_asc", "price", "volume", "recent", "pop", "market_cap")
@@ -53,7 +54,9 @@ class PopulationOut(BaseModel):
 
 
 class ShopListingOut(BaseModel):
-    card: CardOut
+    card: CardOut | None = None
+    title: str | None = None
+    image_url: str | None = None
     source: str
     price: float
     currency: str
@@ -138,8 +141,7 @@ async def get_shop_listings(
 ) -> list[ShopListingOut]:
     if sort not in BROWSE_SORT_OPTIONS:
         sort = "recent"
-    rows = await MarketRepo(session).browse_listings(
-        game=game,
+    rows = await MarketplaceListingsRepo(session).browse(
         q=q,
         source=source,
         grade=grade,
@@ -151,19 +153,35 @@ async def get_shop_listings(
         limit=limit,
         offset=offset,
     )
-    return [
-        ShopListingOut(
-            card=_to_out(r.card),
-            source=r.source,
-            price=r.price,
-            currency=r.currency,
-            price_usd=r.price_usd,
-            grade=r.grade,
-            listing_url=r.listing_url,
-            listed_at=r.listed_at.isoformat(),
+    out: list[ShopListingOut] = []
+    for listing in rows:
+        card_out: CardOut | None = None
+        if listing.card_id is not None:
+            from tcgscan_api.repositories.cards import CardsRepo
+
+            card = await CardsRepo(session).get(listing.card_id)
+            if card is not None:
+                if game and card.game.value != game:
+                    continue
+                card_out = _to_out(card)
+        elif game:
+            continue
+        price_usd = float(listing.price) if listing.currency == "USD" else None
+        out.append(
+            ShopListingOut(
+                card=card_out,
+                title=listing.title,
+                image_url=listing.image_url,
+                source=listing.source,
+                price=float(listing.price),
+                currency=listing.currency,
+                price_usd=price_usd,
+                grade=listing.grade,
+                listing_url=listing.item_url,
+                listed_at=listing.observed_at.isoformat(),
+            )
         )
-        for r in rows
-    ]
+    return out
 
 
 async def get_sales_browse(

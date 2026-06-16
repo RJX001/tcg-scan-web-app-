@@ -246,7 +246,8 @@ export function SalesClient() {
         })}
         {!loading && rows.length === 0 && !error && (
           <li className="px-4 py-10 text-center text-sm text-zinc-500">
-            No sales match. Try clearing filters, or run <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code>.
+            No sales match. Try clearing filters. Sold comps require completed/sold data from
+            eBay/Cardmarket/paid sources.
           </li>
         )}
       </ul>

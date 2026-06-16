@@ -142,6 +142,47 @@ class SaleEvent(Base):
     )
 
 
+class MarketplaceListing(Base):
+    """Active marketplace listings ingested from official APIs (e.g. eBay Browse)."""
+
+    __tablename__ = "marketplace_listings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_listing_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    price: Mapped[Decimal] = mapped_column(DECIMAL(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    condition: Mapped[str | None] = mapped_column(String(64))
+    image_url: Mapped[str | None] = mapped_column(String(1024))
+    item_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    seller_username: Mapped[str | None] = mapped_column(String(128))
+    marketplace: Mapped[str] = mapped_column(String(32), nullable=False, default="EBAY_GB")
+    listing_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
+    affiliate_status: Mapped[str | None] = mapped_column(String(32))
+    grade: Mapped[str | None] = mapped_column(String(32))
+    raw_metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    card_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("card_identity.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("source", "source_listing_id", name="uq_marketplace_listing_source_id"),
+    )
+
+
 class CardPriceDaily(Base):
     __tablename__ = "card_price_daily"
 

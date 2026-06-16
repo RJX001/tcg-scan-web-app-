@@ -39,7 +39,7 @@ const SOURCE_ROWS: SourceRow[] = [
     ingestSlug: "dragon-ball-masters",
     group: "catalog",
   },
-  { id: "ebay", label: "eBay", provider: "eBay Browse", testSlug: "ebay", group: "pricing" },
+  { id: "ebay", label: "eBay", provider: "eBay Browse", testSlug: "ebay", ingestSlug: "ebay", group: "pricing" },
   { id: "reddit", label: "Reddit", provider: "Reddit API", testSlug: "reddit", group: "trends" },
   { id: "cardmarket", label: "Cardmarket / Apify", provider: "Apify", testSlug: "cardmarket", group: "pricing" },
 ];
@@ -65,11 +65,21 @@ function statusBadge(status: DiagnosticStatus | "unknown" | "idle") {
 }
 
 function mapImplementationStatus(implementation: string): DiagnosticStatus {
-  if (implementation === "working") return "success";
+  if (implementation === "working" || implementation === "connected") return "success";
   if (implementation === "partial") return "partial";
   if (implementation === "pending_approval") return "pending_approval";
   if (implementation === "missing" || implementation === "not_implemented") return "not_implemented";
   return "partial";
+}
+
+function isComplianceError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("compliance") ||
+    lower.includes("disabled") ||
+    lower.includes("marketplace account deletion") ||
+    lower.includes("pending approval")
+  );
 }
 
 type AccessState = "loading" | "unauthenticated" | "forbidden" | "ready";
@@ -87,6 +97,14 @@ export function AdminSourcesClient() {
   const statsByKey = useMemo(() => {
     const map = new Map<string, NonNullable<AdminSourcesStatus["catalog_stats"]>[number]>();
     for (const row of statusPayload?.catalog_stats ?? []) {
+      map.set(row.source_key, row);
+    }
+    return map;
+  }, [statusPayload]);
+
+  const pricingStatsByKey = useMemo(() => {
+    const map = new Map<string, NonNullable<AdminSourcesStatus["pricing_stats"]>[number]>();
+    for (const row of statusPayload?.pricing_stats ?? []) {
       map.set(row.source_key, row);
     }
     return map;
@@ -195,7 +213,13 @@ export function AdminSourcesClient() {
     setIngestingId(row.id);
     setError(null);
     try {
-      const result = await postAdminSourceIngest(row.ingestSlug, { limit: 100 });
+      const result =
+        row.id === "ebay"
+          ? await postAdminSourceIngest(row.ingestSlug, {
+              limit: 25,
+              query: "pokemon card charizard",
+            })
+          : await postAdminSourceIngest(row.ingestSlug, { limit: 100 });
       setIngestResults((prev) => ({ ...prev, [row.id]: result }));
       setStatusPayload(await getAdminSourcesStatus());
     } catch (e) {
@@ -206,6 +230,17 @@ export function AdminSourcesClient() {
   }
 
   function configuredStatus(row: SourceRow): DiagnosticStatus | "idle" {
+    const diag = diagnostics[row.id];
+    if (row.id === "ebay") {
+      const meta = pricingById.get("ebay");
+      if (!meta?.configured) return "missing_env";
+      if (diag?.status === "success") return "success";
+      if (diag?.status === "failed" && diag.message && isComplianceError(diag.message)) {
+        return "pending_approval";
+      }
+      if (meta.configured) return "success";
+      return mapImplementationStatus(meta.implementation);
+    }
     if (row.group === "catalog") {
       const meta = catalogById.get(catalogMetaId(row));
       if (!meta) return "idle";
@@ -267,7 +302,7 @@ export function AdminSourcesClient() {
             <thead>
               <tr className="border-b text-xs uppercase text-zinc-500">
                 <th className="pb-2 pr-4">Source</th>
-                <th className="pb-2 pr-4">Cards</th>
+                <th className="pb-2 pr-4">Listings</th>
                 <th className="pb-2 pr-4">Last ingest</th>
                 <th className="pb-2 pr-4">Config</th>
                 <th className="pb-2 pr-4">Live test</th>
@@ -281,19 +316,28 @@ export function AdminSourcesClient() {
                 const ingest = ingestResults[row.id];
                 const configStatus = configuredStatus(row);
                 const stat = statsByKey.get(ingestSourceKey(row));
+                const pricingStat = row.id === "ebay" ? pricingStatsByKey.get("ebay") : undefined;
+                const countLabel =
+                  row.id === "ebay"
+                    ? pricingStat?.listing_count != null
+                      ? pricingStat.listing_count.toLocaleString()
+                      : "—"
+                    : stat?.card_count != null
+                      ? stat.card_count.toLocaleString()
+                      : "—";
+                const lastIngest =
+                  row.id === "ebay"
+                    ? pricingStat?.last_success_at
+                    : stat?.last_success_at;
                 return (
                   <tr key={row.id} className="border-b border-zinc-100 align-top">
                     <td className="py-3 pr-4">
                       <p className="font-medium">{row.label}</p>
                       <p className="text-xs text-zinc-500">{row.provider}</p>
                     </td>
-                    <td className="py-3 pr-4 tabular-nums">
-                      {stat?.card_count != null ? stat.card_count.toLocaleString() : "—"}
-                    </td>
+                    <td className="py-3 pr-4 tabular-nums">{countLabel}</td>
                     <td className="py-3 pr-4 text-xs text-zinc-600">
-                      {stat?.last_success_at
-                        ? new Date(stat.last_success_at).toLocaleString()
-                        : "Never"}
+                      {lastIngest ? new Date(lastIngest).toLocaleString() : "Never"}
                     </td>
                     <td className="py-3 pr-4">{statusBadge(configStatus)}</td>
                     <td className="py-3 pr-4">
