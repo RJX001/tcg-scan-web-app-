@@ -45,3 +45,4 @@ apps/ml/eval/reports/*.md
 
 # logs
 *.log
+.venv312/
