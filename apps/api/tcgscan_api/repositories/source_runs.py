@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, ProgrammingError, SQLAlchemyError
@@ -110,6 +110,35 @@ class SourceRunsRepo:
             if run_type:
                 return await self.last_success(source_key)
             return None
+
+    async def fail_stale_runs(self, source_key: str, *, older_than_seconds: int) -> int:
+        """Mark unfinished runs older than the cutoff as failed.
+
+        Prevents an interrupted import (deploy/restart) from blocking future
+        imports forever by leaving a run stuck in queued/started/running.
+        """
+        cutoff = datetime.now() - timedelta(seconds=older_than_seconds)
+        stmt = select(SourceRun).where(
+            SourceRun.source_key == source_key,
+            SourceRun.status.in_(
+                [SourceRunStatus.queued, SourceRunStatus.started, SourceRunStatus.running]
+            ),
+            SourceRun.started_at < cutoff,
+        )
+        try:
+            rows = list((await self._session.execute(stmt)).scalars().all())
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            return 0
+        if not rows:
+            return 0
+        now = datetime.now()
+        for run in rows:
+            run.status = SourceRunStatus.failed
+            run.error_message = "Reclaimed: import did not finish (stale run)"
+            run.finished_at = now
+        await self._session.commit()
+        return len(rows)
 
     async def active_run(self, source_key: str) -> SourceRun | None:
         stmt = (

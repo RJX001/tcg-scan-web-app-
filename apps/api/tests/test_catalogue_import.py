@@ -12,9 +12,8 @@ from tcgscan_api.db.models import CardIdentity, Game, UserRole
 from tcgscan_api.db.session import get_session
 from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.middleware.auth import AuthUser
-from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.source_runs import SourceRunsRepo
-from tcgscan_api.services.catalogue_import import execute_full_catalogue_import, start_full_catalogue_import
+from tcgscan_api.services.catalogue_import import start_full_catalogue_import
 from tests.test_admin import _make_user, _patch_auth
 
 OPTCG_CARD = {
@@ -164,38 +163,50 @@ async def test_one_piece_full_import_dry_run(sqlite_session: object) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_full_import_runs_synchronously_and_records_success(sqlite_session: object) -> None:
+    _mock_one_piece_endpoints()
+    result = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False)
+    assert result.status == "success"
+    assert result.inserted_count == 1
+    assert result.dry_run is False
+
+    count = await SourceRunsRepo(sqlite_session).count_cards_by_source("optcgapi")
+    assert count == 1
+
+    run = await SourceRunsRepo(sqlite_session).last_success("one_piece", run_type="full")
+    assert run is not None
+    assert run.status.value == "success"
+    assert run.run_type == "full"
+    assert run.finished_at is not None
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_full_import_upserts_without_duplicates(sqlite_session: object) -> None:
     _mock_one_piece_endpoints()
     first = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False, force=True)
-    assert first.status == "queued"
-    await execute_full_catalogue_import(
-        uuid.UUID(first.source_run_id), "one_piece", dry_run=False, session=sqlite_session
-    )
+    assert first.status == "success"
     count1 = await SourceRunsRepo(sqlite_session).count_cards_by_source("optcgapi")
     assert count1 == 1
 
     second = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False, force=True)
-    await execute_full_catalogue_import(
-        uuid.UUID(second.source_run_id), "one_piece", dry_run=False, session=sqlite_session
-    )
+    assert second.status == "success"
+    assert second.updated_count == 1
     count2 = await SourceRunsRepo(sqlite_session).count_cards_by_source("optcgapi")
     assert count2 == 1
-    run = await SourceRunsRepo(sqlite_session).last_success("one_piece", run_type="full")
-    assert run is not None
-    assert run.updated_count >= 1 or run.inserted_count == 0
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_source_run_records_failure(sqlite_session: object) -> None:
     respx.get("https://api.pokemontcg.io/v2/cards").mock(return_value=Response(500, json={"error": "fail"}))
-    queued = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=False, force=True)
-    await execute_full_catalogue_import(
-        uuid.UUID(queued.source_run_id), "pokemon", dry_run=False, session=sqlite_session
-    )
-    run_obj = await SourceRunsRepo(sqlite_session).get(uuid.UUID(queued.source_run_id))
+    result = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=False, force=True)
+    assert result.status == "failed"
+    run_obj = await SourceRunsRepo(sqlite_session).get(uuid.UUID(result.source_run_id))
     assert run_obj is not None
     assert run_obj.status.value == "failed"
+    assert run_obj.finished_at is not None
+    assert run_obj.error_message
 
 
 @pytest.mark.asyncio

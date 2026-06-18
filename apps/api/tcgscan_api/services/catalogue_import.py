@@ -24,6 +24,9 @@ log = structlog.get_logger()
 
 BATCH_UPSERT_SIZE = 500
 PROGRESS_UPDATE_EVERY = 500
+# Reclaim runs that never finished (e.g. process restart mid-import) so a stuck
+# "running" row never blocks future imports or hides "Last Full".
+STALE_RUN_SECONDS = 1800
 
 SOURCE_GAMES: dict[str, str] = {
     "pokemon": "pokemon",
@@ -214,6 +217,7 @@ async def _execute_full_catalogue_import(
         )
     except Exception as exc:
         log.warning("catalogue_import.failed", source=source_key, error=str(exc))
+        await session.rollback()
         await runs.finish(
             run_id,
             status=SourceRunStatus.failed,
@@ -233,11 +237,20 @@ async def start_full_catalogue_import(
     dry_run: bool = False,
     force: bool = False,
 ) -> ImportResult:
+    """Run a full catalogue import synchronously and persist its source_run.
+
+    There is no separate background worker for the API service, so imports run
+    inline in safe batches and the run is finished (``success``/``failed``)
+    before returning. This guarantees "Last Full" updates and that runs are
+    never left stuck in ``running``.
+    """
     if source_key not in SOURCE_GAMES:
         raise ValueError(f"unknown catalogue source: {source_key}")
 
     runs = SourceRunsRepo(session)
-    if not force:
+    await runs.fail_stale_runs(source_key, older_than_seconds=STALE_RUN_SECONDS)
+
+    if not force and not dry_run:
         active = await runs.active_run(source_key)
         if active is not None:
             return ImportResult(
@@ -256,49 +269,44 @@ async def start_full_catalogue_import(
         dry_run=dry_run,
         game=game,
         run_type="full",
-        status=SourceRunStatus.queued,
+        status=SourceRunStatus.started if dry_run else SourceRunStatus.running,
     )
+    # Capture before any rollback: rollback expires ORM attributes and a later
+    # lazy reload would attempt sync IO outside the async greenlet context.
+    run_id = run.id
     started_at = run.started_at or datetime.now()
 
-    if dry_run:
-        try:
-            normalized = await _fetch_full_normalized(source_key, limit=limit or 100)
-            return await _process_rows(
-                session,
-                run.id,
-                normalized=normalized,
-                dry_run=True,
-                started_at=started_at,
-            )
-        except Exception as exc:
-            finished = await runs.finish(
-                run.id,
-                status=SourceRunStatus.failed,
-                inserted_count=0,
-                updated_count=0,
-                skipped_count=0,
-                error_message=str(exc),
-                started_at=started_at,
-            )
-            return ImportResult(
-                source_run_id=str(finished.id),
-                status=SourceRunStatus.failed.value,
-                inserted_count=0,
-                updated_count=0,
-                skipped_count=0,
-                message=str(exc),
-                dry_run=True,
-            )
-
-    return ImportResult(
-        source_run_id=str(run.id),
-        status="queued",
-        inserted_count=0,
-        updated_count=0,
-        skipped_count=0,
-        message="Full catalogue import queued",
-        dry_run=False,
-    )
+    try:
+        fetch_limit = (limit or 100) if dry_run else limit
+        normalized = await _fetch_full_normalized(source_key, limit=fetch_limit)
+        return await _process_rows(
+            session,
+            run_id,
+            normalized=normalized,
+            dry_run=dry_run,
+            started_at=started_at,
+        )
+    except Exception as exc:
+        log.warning("catalogue_import.failed", source=source_key, error=str(exc))
+        await session.rollback()
+        finished = await runs.finish(
+            run_id,
+            status=SourceRunStatus.failed,
+            inserted_count=0,
+            updated_count=0,
+            skipped_count=0,
+            error_message=str(exc),
+            started_at=started_at,
+        )
+        return ImportResult(
+            source_run_id=str(finished.id),
+            status=SourceRunStatus.failed.value,
+            inserted_count=0,
+            updated_count=0,
+            skipped_count=0,
+            message=str(exc),
+            dry_run=dry_run,
+        )
 
 
 async def catalogue_stats(session: AsyncSession) -> dict[str, Any]:

@@ -327,8 +327,8 @@ export function AdminSourcesClient() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-sm text-amber-800">
-            Full catalogue imports should run as background jobs. Use &quot;Ingest sample&quot; (limit 100)
-            for safe testing only.
+            Full catalogue imports run synchronously in safe batches and may take a few minutes for large
+            catalogues. &quot;Ingest sample&quot; (limit 100) is the fast option for testing connectivity.
           </p>
         </CardContent>
       </Card>
