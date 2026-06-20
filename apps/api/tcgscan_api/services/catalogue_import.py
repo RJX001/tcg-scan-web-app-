@@ -10,7 +10,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tcgscan_api.db.models import SourceRunStatus
+from tcgscan_api.db.models import SourceRun, SourceRunStatus
 from tcgscan_api.db.session import get_sessionmaker
 from tcgscan_api.repositories.cards import CardsRepo
 from tcgscan_api.repositories.source_runs import SourceRunsRepo
@@ -24,6 +24,8 @@ log = structlog.get_logger()
 
 BATCH_UPSERT_SIZE = 500
 PROGRESS_UPDATE_EVERY = 500
+DEFAULT_POKEMON_BATCH_SIZE = 250
+BATCH_CURSOR_PREFIX = "batch_cursor:"
 # Reclaim runs that never finished (e.g. process restart mid-import) so a stuck
 # "running" row never blocks future imports or hides "Last Full".
 STALE_RUN_SECONDS = 1800
@@ -52,6 +54,8 @@ class ImportResult:
     skipped_count: int
     message: str
     dry_run: bool = False
+    next_page_token: str | None = None
+    complete: bool = True
 
 
 def _public_status(status: SourceRunStatus | str) -> str:
@@ -59,6 +63,72 @@ def _public_status(status: SourceRunStatus | str) -> str:
     if value == SourceRunStatus.started.value:
         return "running"
     return value
+
+
+def encode_batch_cursor(page: int, batch_size: int) -> str:
+    return f"{BATCH_CURSOR_PREFIX}page={page};size={batch_size}"
+
+
+def decode_batch_cursor(message: str | None) -> tuple[int, int] | None:
+    if not message or not message.startswith(BATCH_CURSOR_PREFIX):
+        return None
+    payload = message[len(BATCH_CURSOR_PREFIX) :]
+    parts: dict[str, str] = {}
+    for segment in payload.split(";"):
+        if "=" in segment:
+            key, value = segment.split("=", 1)
+            parts[key.strip()] = value.strip()
+    if "page" not in parts or "size" not in parts:
+        return None
+    try:
+        return int(parts["page"]), int(parts["size"])
+    except ValueError:
+        return None
+
+
+def _normalize_rows(
+    normalized: list[dict[str, Any]],
+    *,
+    optional_skipped: list[str] | None = None,
+) -> tuple[list[dict[str, object]], int]:
+    skipped = len(optional_skipped or [])
+    rows: list[dict[str, object]] = []
+    for item in normalized:
+        if not item.get("source_card_id") or not item.get("name"):
+            skipped += 1
+            continue
+        try:
+            rows.append(to_card_identity_row(item))
+        except (ValueError, KeyError) as exc:
+            skipped += 1
+            log.debug("catalogue_import.skip_row", error=str(exc))
+    return rows, skipped
+
+
+async def _upsert_rows(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+    rows: list[dict[str, object]],
+    *,
+    skipped: int,
+) -> tuple[int, int]:
+    runs = SourceRunsRepo(session)
+    inserted_total = 0
+    updated_total = 0
+    cards = CardsRepo(session)
+    for i in range(0, len(rows), BATCH_UPSERT_SIZE):
+        batch = rows[i : i + BATCH_UPSERT_SIZE]
+        ins, upd = await cards.upsert_catalog_batch(batch, commit_every=BATCH_UPSERT_SIZE)
+        inserted_total += ins
+        updated_total += upd
+        if (i + len(batch)) % PROGRESS_UPDATE_EVERY == 0:
+            await runs.update_counts(
+                run_id,
+                inserted_count=inserted_total,
+                updated_count=updated_total,
+                skipped_count=skipped,
+            )
+    return inserted_total, updated_total
 
 
 @dataclass
@@ -128,17 +198,7 @@ async def _process_rows(
     optional_skipped: list[str] | None = None,
 ) -> ImportResult:
     runs = SourceRunsRepo(session)
-    skipped = len(optional_skipped or [])
-    rows: list[dict[str, object]] = []
-    for item in normalized:
-        if not item.get("source_card_id") or not item.get("name"):
-            skipped += 1
-            continue
-        try:
-            rows.append(to_card_identity_row(item))
-        except (ValueError, KeyError) as exc:
-            skipped += 1
-            log.debug("catalogue_import.skip_row", error=str(exc))
+    rows, skipped = _normalize_rows(normalized, optional_skipped=optional_skipped)
 
     if dry_run:
         finished = await runs.finish(
@@ -163,21 +223,7 @@ async def _process_rows(
             dry_run=True,
         )
 
-    inserted_total = 0
-    updated_total = 0
-    cards = CardsRepo(session)
-    for i in range(0, len(rows), BATCH_UPSERT_SIZE):
-        batch = rows[i : i + BATCH_UPSERT_SIZE]
-        ins, upd = await cards.upsert_catalog_batch(batch, commit_every=BATCH_UPSERT_SIZE)
-        inserted_total += ins
-        updated_total += upd
-        if (i + len(batch)) % PROGRESS_UPDATE_EVERY == 0:
-            await runs.update_counts(
-                run_id,
-                inserted_count=inserted_total,
-                updated_count=updated_total,
-                skipped_count=skipped,
-            )
+    inserted_total, updated_total = await _upsert_rows(session, run_id, rows, skipped=skipped)
 
     finished = await runs.finish(
         run_id,
@@ -202,6 +248,211 @@ async def _process_rows(
         skipped_count=skipped,
         message=message,
         dry_run=False,
+    )
+
+
+async def _pokemon_batched_import(
+    session: AsyncSession,
+    *,
+    batch_size: int,
+    page_token: str | None,
+    source_run_id: uuid.UUID | None,
+    dry_run: bool,
+    force: bool,
+) -> ImportResult:
+    """Fetch and upsert one Pokémon TCG API page per request."""
+    batch_size = max(1, min(batch_size, 250))
+    runs = SourceRunsRepo(session)
+    await runs.fail_stale_runs("pokemon", older_than_seconds=STALE_RUN_SECONDS)
+
+    continuing = page_token is not None and source_run_id is not None
+    run: SourceRun | None = None
+    page = 1
+    inserted_total = 0
+    updated_total = 0
+    skipped_total = 0
+    started_at = datetime.now()
+
+    if continuing:
+        run = await runs.get(source_run_id)  # type: ignore[arg-type]
+        if run is None or run.source_key != "pokemon" or run.dry_run != dry_run:
+            raise ValueError("invalid source_run_id for Pokémon import continuation")
+        try:
+            page = int(page_token or "1")
+        except ValueError as exc:
+            raise ValueError("invalid page_token") from exc
+        inserted_total = run.inserted_count
+        updated_total = run.updated_count
+        skipped_total = run.skipped_count
+        started_at = run.started_at or started_at
+    else:
+        if not force and not dry_run:
+            active = await runs.active_run("pokemon")
+            if active is not None:
+                cursor = decode_batch_cursor(active.error_message)
+                next_page = str(cursor[0]) if cursor else None
+                return ImportResult(
+                    source_run_id=str(active.id),
+                    status=_public_status(active.status),
+                    inserted_count=active.inserted_count,
+                    updated_count=active.updated_count,
+                    skipped_count=active.skipped_count,
+                    message=(
+                        "Import already in progress. Continue with the next batch."
+                        if next_page
+                        else "Import already in progress"
+                    ),
+                    dry_run=active.dry_run,
+                    next_page_token=next_page,
+                    complete=False,
+                )
+        run = await runs.start(
+            "pokemon",
+            dry_run=dry_run,
+            game=SOURCE_GAMES["pokemon"],
+            run_type="full",
+            status=SourceRunStatus.running,
+        )
+        started_at = run.started_at or started_at
+
+    assert run is not None
+    run_id = run.id
+
+    pokemon_client = PokemonClient()
+    try:
+        page_result = await pokemon_client.fetch_page(page=page, page_size=batch_size)
+    finally:
+        await pokemon_client.aclose()
+
+    if page_result.page_failed:
+        skipped_total += 1
+        if not continuing and inserted_total == 0 and updated_total == 0:
+            finished = await runs.finish(
+                run_id,
+                status=SourceRunStatus.failed,
+                inserted_count=0,
+                updated_count=0,
+                skipped_count=skipped_total,
+                error_message=f"Pokémon API page {page} failed",
+                started_at=started_at,
+            )
+            return ImportResult(
+                source_run_id=str(finished.id),
+                status=SourceRunStatus.failed.value,
+                inserted_count=0,
+                updated_count=0,
+                skipped_count=skipped_total,
+                message=f"Pokémon import failed on page {page}",
+                dry_run=dry_run,
+                complete=True,
+            )
+        if page > 500:
+            finished = await runs.finish(
+                run_id,
+                status=SourceRunStatus.failed,
+                inserted_count=inserted_total,
+                updated_count=updated_total,
+                skipped_count=skipped_total,
+                error_message=f"Pokémon API page {page} failed repeatedly",
+                started_at=started_at,
+            )
+            return ImportResult(
+                source_run_id=str(finished.id),
+                status=SourceRunStatus.failed.value,
+                inserted_count=inserted_total,
+                updated_count=updated_total,
+                skipped_count=skipped_total,
+                message=f"Pokémon import failed on page {page}",
+                dry_run=dry_run,
+                complete=True,
+            )
+        await runs.update_progress(
+            run_id,
+            inserted_count=inserted_total,
+            updated_count=updated_total,
+            skipped_count=skipped_total,
+            cursor_message=encode_batch_cursor(page_result.next_page, batch_size),
+        )
+        return ImportResult(
+            source_run_id=str(run_id),
+            status=SourceRunStatus.running.value,
+            inserted_count=inserted_total,
+            updated_count=updated_total,
+            skipped_count=skipped_total,
+            message=f"Skipped failed Pokémon API page {page}. Continue with next batch.",
+            dry_run=dry_run,
+            next_page_token=str(page_result.next_page),
+            complete=False,
+        )
+
+    rows, skipped_batch = _normalize_rows(page_result.cards)
+    skipped_total += skipped_batch
+
+    if dry_run:
+        finished = await runs.finish(
+            run_id,
+            status=SourceRunStatus.success,
+            inserted_count=len(rows),
+            updated_count=0,
+            skipped_count=skipped_total,
+            error_message="dry_run",
+            started_at=started_at,
+        )
+        return ImportResult(
+            source_run_id=str(finished.id),
+            status=SourceRunStatus.success.value,
+            inserted_count=len(rows),
+            updated_count=0,
+            skipped_count=skipped_total,
+            message=f"Dry run: {len(rows)} cards ready to upsert (page {page})",
+            dry_run=True,
+        )
+
+    ins, upd = await _upsert_rows(session, run_id, rows, skipped=skipped_total)
+    inserted_total += ins
+    updated_total += upd
+
+    if page_result.has_more:
+        await runs.update_progress(
+            run_id,
+            inserted_count=inserted_total,
+            updated_count=updated_total,
+            skipped_count=skipped_total,
+            cursor_message=encode_batch_cursor(page_result.next_page, batch_size),
+        )
+        batch_count = ins + upd
+        return ImportResult(
+            source_run_id=str(run_id),
+            status=SourceRunStatus.running.value,
+            inserted_count=inserted_total,
+            updated_count=updated_total,
+            skipped_count=skipped_total,
+            message=(
+                f"Imported Pokémon batch page {page} ({batch_count} cards this batch, "
+                f"{inserted_total + updated_total} total). Continue with next batch."
+            ),
+            dry_run=False,
+            next_page_token=str(page_result.next_page),
+            complete=False,
+        )
+
+    finished = await runs.finish(
+        run_id,
+        status=SourceRunStatus.success,
+        inserted_count=inserted_total,
+        updated_count=updated_total,
+        skipped_count=skipped_total,
+        started_at=started_at,
+    )
+    return ImportResult(
+        source_run_id=str(finished.id),
+        status=SourceRunStatus.success.value,
+        inserted_count=inserted_total,
+        updated_count=updated_total,
+        skipped_count=skipped_total,
+        message=f"Pokémon full import complete: {inserted_total + updated_total} catalogue cards",
+        dry_run=False,
+        complete=True,
     )
 
 
@@ -277,21 +528,32 @@ async def start_full_catalogue_import(
     limit: int | None = None,
     dry_run: bool = False,
     force: bool = False,
+    batch_size: int | None = None,
+    page_token: str | None = None,
+    source_run_id: uuid.UUID | None = None,
 ) -> ImportResult:
-    """Run a full catalogue import synchronously and persist its source_run.
+    """Run a catalogue import and persist progress on ``source_runs``.
 
-    There is no separate background worker for the API service, so imports run
-    inline in safe batches and the run is finished (``success``/``failed``)
-    before returning. This guarantees "Last Full" updates and that runs are
-    never left stuck in ``running``.
+    Pokémon full imports fetch one API page per request so the admin UI and
+    status endpoints stay responsive. Other sources run inline in safe batches.
     """
     if source_key not in SOURCE_GAMES:
         raise ValueError(f"unknown catalogue source: {source_key}")
 
+    if source_key == "pokemon" and limit is None:
+        return await _pokemon_batched_import(
+            session,
+            batch_size=batch_size or DEFAULT_POKEMON_BATCH_SIZE,
+            page_token=page_token,
+            source_run_id=source_run_id,
+            dry_run=dry_run,
+            force=force,
+        )
+
     runs = SourceRunsRepo(session)
     await runs.fail_stale_runs(source_key, older_than_seconds=STALE_RUN_SECONDS)
 
-    if not force and not dry_run:
+    if not force and not dry_run and page_token is None:
         active = await runs.active_run(source_key)
         if active is not None:
             return ImportResult(
@@ -302,6 +564,7 @@ async def start_full_catalogue_import(
                 skipped_count=active.skipped_count,
                 message="Import already in progress",
                 dry_run=active.dry_run,
+                complete=False,
             )
 
     game = SOURCE_GAMES[source_key]
@@ -312,8 +575,6 @@ async def start_full_catalogue_import(
         run_type="full",
         status=SourceRunStatus.started if dry_run else SourceRunStatus.running,
     )
-    # Capture before any rollback: rollback expires ORM attributes and a later
-    # lazy reload would attempt sync IO outside the async greenlet context.
     run_id = run.id
     started_at = run.started_at or datetime.now()
 

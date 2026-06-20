@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Any
 
+import httpx
+import structlog
+
 from tcgscan_api.sources.http_client import SourceHttpClient
+
+log = structlog.get_logger()
 
 DEFAULT_BASE_URL = "https://api.pokemontcg.io/v2"
 
@@ -44,6 +50,14 @@ def normalize_card(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+@dataclass(frozen=True)
+class PokemonPageResult:
+    cards: list[dict[str, Any]]
+    has_more: bool
+    next_page: int
+    page_failed: bool = False
+
+
 class PokemonClient:
     def __init__(self, *, base_url: str | None = None) -> None:
         url = (base_url or _base_url()).rstrip("/")
@@ -56,30 +70,61 @@ class PokemonClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def iter_cards(self, *, limit: int | None = 100) -> list[dict[str, Any]]:
-        page = 1
-        page_size = 250 if limit is None or limit > 250 else min(limit, 250)
-        cards: list[dict[str, Any]] = []
-        while limit is None or len(cards) < limit:
+    async def fetch_page(self, *, page: int, page_size: int) -> PokemonPageResult:
+        page = max(1, page)
+        page_size = max(1, min(page_size, 250))
+        try:
             payload = await self._http.get_json(
                 "/cards",
                 params={"page": page, "pageSize": page_size},
                 cache_key=f"source:pokemon:cards:p{page}:s{page_size}",
                 cache_ttl_s=3600,
             )
-            data = payload.get("data") if isinstance(payload, dict) else []
-            if not isinstance(data, list) or not data:
-                break
-            for raw in data:
-                if not isinstance(raw, dict):
-                    continue
-                normalized = normalize_card(raw)
-                if normalized is None:
-                    continue
+        except httpx.HTTPStatusError as exc:
+            log.warning(
+                "pokemon.page_fetch_failed",
+                page=page,
+                status=exc.response.status_code,
+            )
+            return PokemonPageResult(cards=[], has_more=True, next_page=page + 1, page_failed=True)
+        except httpx.HTTPError as exc:
+            log.warning("pokemon.page_fetch_failed", page=page, error=str(exc))
+            return PokemonPageResult(cards=[], has_more=True, next_page=page + 1, page_failed=True)
+
+        data = payload.get("data") if isinstance(payload, dict) else []
+        if not isinstance(data, list):
+            data = []
+        cards: list[dict[str, Any]] = []
+        for raw in data:
+            if not isinstance(raw, dict):
+                continue
+            normalized = normalize_card(raw)
+            if normalized is not None:
                 cards.append(normalized)
-                if limit is not None and len(cards) >= limit:
+
+        total_count = payload.get("totalCount") if isinstance(payload, dict) else None
+        if isinstance(total_count, int) and total_count >= 0:
+            fetched_so_far = (page - 1) * page_size + len(data)
+            has_more = fetched_so_far < total_count and len(data) > 0
+        else:
+            has_more = len(data) >= page_size
+        return PokemonPageResult(cards=cards, has_more=has_more, next_page=page + 1)
+
+    async def iter_cards(self, *, limit: int | None = 100) -> list[dict[str, Any]]:
+        page = 1
+        page_size = 250 if limit is None or limit > 250 else min(limit, 250)
+        cards: list[dict[str, Any]] = []
+        while limit is None or len(cards) < limit:
+            result = await self.fetch_page(page=page, page_size=page_size)
+            if result.page_failed and not result.cards:
+                page = result.next_page
+                if page > 500:
                     break
-            if len(data) < page_size:
+                continue
+            cards.extend(result.cards)
+            if limit is not None and len(cards) >= limit:
                 break
-            page += 1
+            if not result.has_more:
+                break
+            page = result.next_page
         return cards if limit is None else cards[:limit]

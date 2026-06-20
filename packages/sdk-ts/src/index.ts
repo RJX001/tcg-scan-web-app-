@@ -309,6 +309,8 @@ export type AdminIngestResult = {
   skipped_count: number;
   message: string;
   dry_run: boolean;
+  next_page_token?: string | null;
+  complete?: boolean;
 };
 
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -574,12 +576,22 @@ export async function postAdminSourceIngest(
 
 export async function postAdminSourceImport(
   slug: string,
-  opts?: { limit?: number; dryRun?: boolean; force?: boolean },
+  opts?: {
+    limit?: number;
+    dryRun?: boolean;
+    force?: boolean;
+    batchSize?: number;
+    pageToken?: string;
+    sourceRunId?: string;
+  },
 ): Promise<AdminIngestResult> {
   const params = new URLSearchParams();
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.dryRun) params.set("dry_run", "true");
   if (opts?.force) params.set("force", "true");
+  if (opts?.batchSize) params.set("batch_size", String(opts.batchSize));
+  if (opts?.pageToken) params.set("page_token", opts.pageToken);
+  if (opts?.sourceRunId) params.set("source_run_id", opts.sourceRunId);
   const qs = params.toString();
   return apiFetch<AdminIngestResult>(`/v1/admin/sources/import/${slug}${qs ? `?${qs}` : ""}`, {
     method: "POST",

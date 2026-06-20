@@ -276,6 +276,9 @@ async def _run_import(
     limit: int | None,
     dry_run: bool,
     force: bool,
+    batch_size: int | None = None,
+    page_token: str | None = None,
+    source_run_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     await _admin_user(request, session)
     result = await start_full_catalogue_import(
@@ -284,6 +287,9 @@ async def _run_import(
         limit=limit,
         dry_run=dry_run,
         force=force,
+        batch_size=batch_size,
+        page_token=page_token,
+        source_run_id=source_run_id,
     )
     return {
         "source_run_id": result.source_run_id,
@@ -293,6 +299,8 @@ async def _run_import(
         "skipped_count": result.skipped_count,
         "message": result.message,
         "dry_run": result.dry_run,
+        "next_page_token": result.next_page_token,
+        "complete": result.complete,
     }
 
 
@@ -303,8 +311,21 @@ async def admin_import_pokemon(
     limit: int | None = Query(default=None, ge=1, le=50000),
     dry_run: bool = Query(default=False),
     force: bool = Query(default=False),
+    batch_size: int = Query(default=250, ge=1, le=250),
+    page_token: str | None = Query(default=None),
+    source_run_id: uuid.UUID | None = Query(default=None),
 ) -> dict[str, Any]:
-    return await _run_import(request, session, "pokemon", limit=limit, dry_run=dry_run, force=force)
+    return await _run_import(
+        request,
+        session,
+        "pokemon",
+        limit=limit,
+        dry_run=dry_run,
+        force=force,
+        batch_size=batch_size,
+        page_token=page_token,
+        source_run_id=source_run_id,
+    )
 
 
 @router.post("/sources/import/scryfall")

@@ -225,8 +225,28 @@ export function AdminSourcesClient() {
     setImportingId(row.id);
     setError(null);
     try {
-      const result = await postAdminSourceImport(row.importSlug);
-      setIngestResults((prev) => ({ ...prev, [row.id]: result }));
+      const useBatches = row.id === "pokemon";
+      let pageToken: string | undefined;
+      let sourceRunId: string | undefined;
+      let lastResult: AdminIngestResult | null = null;
+
+      do {
+        lastResult = await postAdminSourceImport(row.importSlug, {
+          batchSize: useBatches ? 250 : undefined,
+          pageToken,
+          sourceRunId,
+        });
+        pageToken = lastResult.next_page_token ?? undefined;
+        sourceRunId = lastResult.source_run_id;
+        setIngestResults((prev) => ({ ...prev, [row.id]: lastResult! }));
+        if (useBatches && lastResult.complete === false) {
+          setStatusPayload(await getAdminSourcesStatus());
+        }
+      } while (useBatches && lastResult && lastResult.complete === false && lastResult.next_page_token);
+
+      if (lastResult) {
+        setIngestResults((prev) => ({ ...prev, [row.id]: lastResult! }));
+      }
       setStatusPayload(await getAdminSourcesStatus());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
@@ -327,8 +347,9 @@ export function AdminSourcesClient() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-sm text-amber-800">
-            Full catalogue imports run synchronously in safe batches and may take a few minutes for large
-            catalogues. &quot;Ingest sample&quot; (limit 100) is the fast option for testing connectivity.
+            Full catalogue imports run in safe batches. Pokémon imports one API page (250 cards) per
+            request so this page stays responsive. &quot;Ingest sample&quot; (limit 100) is the fast
+            option for testing connectivity.
           </p>
         </CardContent>
       </Card>

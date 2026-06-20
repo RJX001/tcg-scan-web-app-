@@ -52,6 +52,7 @@ class SourceRunsRepo:
         inserted_count: int,
         updated_count: int,
         skipped_count: int,
+        error_message: str | None = None,
     ) -> None:
         run = await self._session.get(SourceRun, run_id)
         if run is None:
@@ -59,6 +60,30 @@ class SourceRunsRepo:
         run.inserted_count = inserted_count
         run.updated_count = updated_count
         run.skipped_count = skipped_count
+        if error_message is not None:
+            run.error_message = error_message[:1024]
+        await self._session.commit()
+
+    async def update_progress(
+        self,
+        run_id: uuid.UUID,
+        *,
+        inserted_count: int,
+        updated_count: int,
+        skipped_count: int,
+        cursor_message: str | None = None,
+    ) -> None:
+        """Persist in-flight batch progress without finishing the run."""
+        run = await self._session.get(SourceRun, run_id)
+        if run is None:
+            return
+        run.status = SourceRunStatus.running
+        run.inserted_count = inserted_count
+        run.updated_count = updated_count
+        run.skipped_count = skipped_count
+        run.error_message = cursor_message[:1024] if cursor_message else None
+        run.finished_at = None
+        run.duration_ms = None
         await self._session.commit()
 
     async def finish(
