@@ -299,6 +299,7 @@ export type AdminCatalogStat = {
   last_full_at?: string | null;
   current_run_status?: string | null;
   current_run_id?: string | null;
+  import_status_message?: string | null;
 };
 
 export type AdminIngestResult = {

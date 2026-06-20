@@ -28,7 +28,8 @@ DEFAULT_POKEMON_BATCH_SIZE = 250
 BATCH_CURSOR_PREFIX = "batch_cursor:"
 # Reclaim runs that never finished (e.g. process restart mid-import) so a stuck
 # "running" row never blocks future imports or hides "Last Full".
-STALE_RUN_SECONDS = 1800
+STALE_RUN_SECONDS = 600
+STALE_RUN_ERROR_MESSAGE = "Import timed out or browser disconnected. Safe to retry."
 
 SOURCE_GAMES: dict[str, str] = {
     "pokemon": "pokemon",
@@ -70,9 +71,10 @@ def encode_batch_cursor(page: int, batch_size: int) -> str:
 
 
 def decode_batch_cursor(message: str | None) -> tuple[int, int] | None:
-    if not message or not message.startswith(BATCH_CURSOR_PREFIX):
+    if not message or BATCH_CURSOR_PREFIX not in message:
         return None
-    payload = message[len(BATCH_CURSOR_PREFIX) :]
+    idx = message.index(BATCH_CURSOR_PREFIX)
+    payload = message[idx + len(BATCH_CURSOR_PREFIX) :]
     parts: dict[str, str] = {}
     for segment in payload.split(";"):
         if "=" in segment:
@@ -129,6 +131,22 @@ async def _upsert_rows(
                 skipped_count=skipped,
             )
     return inserted_total, updated_total
+
+
+async def recover_stale_catalogue_imports(session: AsyncSession) -> int:
+    """Mark abandoned catalogue import runs as failed so admin UI can recover."""
+    runs = SourceRunsRepo(session)
+    reclaimed = 0
+    for source_key in SOURCE_GAMES:
+        reclaimed += await runs.fail_stale_runs(
+            source_key,
+            older_than_seconds=STALE_RUN_SECONDS,
+            error_message=STALE_RUN_ERROR_MESSAGE,
+            preserve_batch_cursor=True,
+        )
+    if reclaimed:
+        log.info("catalogue_import.stale_runs_reclaimed", count=reclaimed)
+    return reclaimed
 
 
 @dataclass
@@ -263,9 +281,15 @@ async def _pokemon_batched_import(
     """Fetch and upsert one Pokémon TCG API page per request."""
     batch_size = max(1, min(batch_size, 250))
     runs = SourceRunsRepo(session)
-    await runs.fail_stale_runs("pokemon", older_than_seconds=STALE_RUN_SECONDS)
+    await runs.fail_stale_runs(
+        "pokemon",
+        older_than_seconds=STALE_RUN_SECONDS,
+        error_message=STALE_RUN_ERROR_MESSAGE,
+        preserve_batch_cursor=True,
+    )
 
     continuing = page_token is not None and source_run_id is not None
+    resuming = False
     run: SourceRun | None = None
     page = 1
     inserted_total = 0
@@ -306,14 +330,42 @@ async def _pokemon_batched_import(
                     next_page_token=next_page,
                     complete=False,
                 )
-        run = await runs.start(
-            "pokemon",
-            dry_run=dry_run,
-            game=SOURCE_GAMES["pokemon"],
-            run_type="full",
-            status=SourceRunStatus.running,
-        )
-        started_at = run.started_at or started_at
+
+            resumable = await runs.latest_failed_with_cursor("pokemon")
+            if resumable is not None:
+                cursor = decode_batch_cursor(resumable.error_message)
+                if cursor is not None:
+                    page, saved_batch_size = cursor
+                    batch_size = saved_batch_size
+                    await runs.reopen_run(
+                        resumable.id,
+                        cursor_message=encode_batch_cursor(page, batch_size),
+                    )
+                    run = await runs.get(resumable.id)
+                    assert run is not None
+                    run_id = run.id
+                    inserted_total = run.inserted_count
+                    updated_total = run.updated_count
+                    skipped_total = run.skipped_count
+                    started_at = run.started_at or started_at
+                    continuing = True
+                    resuming = True
+                else:
+                    resuming = False
+            else:
+                resuming = False
+        else:
+            resuming = False
+
+        if not continuing:
+            run = await runs.start(
+                "pokemon",
+                dry_run=dry_run,
+                game=SOURCE_GAMES["pokemon"],
+                run_type="full",
+                status=SourceRunStatus.running,
+            )
+            started_at = run.started_at or started_at
 
     assert run is not None
     run_id = run.id
@@ -421,6 +473,7 @@ async def _pokemon_batched_import(
             cursor_message=encode_batch_cursor(page_result.next_page, batch_size),
         )
         batch_count = ins + upd
+        resume_prefix = "Resuming timed-out import. " if resuming else ""
         return ImportResult(
             source_run_id=str(run_id),
             status=SourceRunStatus.running.value,
@@ -428,7 +481,7 @@ async def _pokemon_batched_import(
             updated_count=updated_total,
             skipped_count=skipped_total,
             message=(
-                f"Imported Pokémon batch page {page} ({batch_count} cards this batch, "
+                f"{resume_prefix}Imported Pokémon batch page {page} ({batch_count} cards this batch, "
                 f"{inserted_total + updated_total} total). Continue with next batch."
             ),
             dry_run=False,
@@ -551,7 +604,12 @@ async def start_full_catalogue_import(
         )
 
     runs = SourceRunsRepo(session)
-    await runs.fail_stale_runs(source_key, older_than_seconds=STALE_RUN_SECONDS)
+    await runs.fail_stale_runs(
+        source_key,
+        older_than_seconds=STALE_RUN_SECONDS,
+        error_message=STALE_RUN_ERROR_MESSAGE,
+        preserve_batch_cursor=True,
+    )
 
     if not force and not dry_run and page_token is None:
         active = await runs.active_run(source_key)
@@ -624,6 +682,12 @@ async def catalogue_stats(session: AsyncSession) -> dict[str, Any]:
         active = await runs.active_run(source_key)
         last_sample = await runs.last_success(source_key, run_type="sample")
         last_full = await runs.last_success(source_key, run_type="full")
+        last_failed = await runs.last_failed(source_key, run_type="full")
+        import_status_message: str | None = None
+        if last_failed and last_failed.error_message and STALE_RUN_ERROR_MESSAGE in last_failed.error_message:
+            import_status_message = (
+                "Previous import timed out or disconnected. You can retry safely."
+            )
         stats.append(
             {
                 **row,
@@ -637,6 +701,7 @@ async def catalogue_stats(session: AsyncSession) -> dict[str, Any]:
                 ),
                 "current_run_status": _public_status(active.status) if active else None,
                 "current_run_id": str(active.id) if active else None,
+                "import_status_message": import_status_message,
             }
         )
     return {"catalog_stats": stats}

@@ -391,6 +391,8 @@ export function AdminSourcesClient() {
                     : stat?.last_sample_at ?? stat?.last_success_at;
                 const lastFull = row.id === "ebay" ? null : stat?.last_full_at;
                 const runStatus = row.id === "ebay" ? null : stat?.current_run_status;
+                const importStatusMessage =
+                  row.id === "ebay" ? null : stat?.import_status_message ?? null;
                 return (
                   <tr key={row.id} className="border-b border-zinc-100 align-top">
                     <td className="py-3 pr-4">
@@ -406,6 +408,9 @@ export function AdminSourcesClient() {
                     </td>
                     <td className="py-3 pr-4 text-xs text-zinc-600">
                       {runStatus ? statusBadge(runStatus as DiagnosticStatus) : "—"}
+                      {importStatusMessage ? (
+                        <p className="mt-1 text-amber-800">{importStatusMessage}</p>
+                      ) : null}
                     </td>
                     <td className="py-3 pr-4">{statusBadge(configStatus)}</td>
                     <td className="py-3 pr-4">

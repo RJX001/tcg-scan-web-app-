@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import CardIdentity, SourceRun, SourceRunStatus
 
+BATCH_CURSOR_PREFIX = "batch_cursor:"
+
 
 class SourceRunsRepo:
     def __init__(self, session: AsyncSession) -> None:
@@ -84,6 +86,7 @@ class SourceRunsRepo:
         run.error_message = cursor_message[:1024] if cursor_message else None
         run.finished_at = None
         run.duration_ms = None
+        run.started_at = datetime.now()
         await self._session.commit()
 
     async def finish(
@@ -136,7 +139,58 @@ class SourceRunsRepo:
                 return await self.last_success(source_key)
             return None
 
-    async def fail_stale_runs(self, source_key: str, *, older_than_seconds: int) -> int:
+    async def last_failed(self, source_key: str, *, run_type: str | None = None) -> SourceRun | None:
+        stmt = select(SourceRun).where(
+            SourceRun.source_key == source_key,
+            SourceRun.status == SourceRunStatus.failed,
+        )
+        if run_type:
+            stmt = stmt.where(SourceRun.run_type == run_type)
+        stmt = stmt.order_by(SourceRun.finished_at.desc()).limit(1)
+        try:
+            return (await self._session.execute(stmt)).scalar_one_or_none()
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            return None
+
+    async def latest_failed_with_cursor(self, source_key: str) -> SourceRun | None:
+        stmt = (
+            select(SourceRun)
+            .where(
+                SourceRun.source_key == source_key,
+                SourceRun.status == SourceRunStatus.failed,
+                SourceRun.run_type == "full",
+                SourceRun.error_message.isnot(None),
+                SourceRun.error_message.contains(BATCH_CURSOR_PREFIX),
+            )
+            .order_by(SourceRun.finished_at.desc())
+            .limit(1)
+        )
+        try:
+            return (await self._session.execute(stmt)).scalar_one_or_none()
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            return None
+
+    async def reopen_run(self, run_id: uuid.UUID, *, cursor_message: str | None) -> None:
+        run = await self._session.get(SourceRun, run_id)
+        if run is None:
+            return
+        run.status = SourceRunStatus.running
+        run.error_message = cursor_message[:1024] if cursor_message else None
+        run.finished_at = None
+        run.duration_ms = None
+        run.started_at = datetime.now()
+        await self._session.commit()
+
+    async def fail_stale_runs(
+        self,
+        source_key: str,
+        *,
+        older_than_seconds: int,
+        error_message: str = "Reclaimed: import did not finish (stale run)",
+        preserve_batch_cursor: bool = False,
+    ) -> int:
         """Mark unfinished runs older than the cutoff as failed.
 
         Prevents an interrupted import (deploy/restart) from blocking future
@@ -160,7 +214,11 @@ class SourceRunsRepo:
         now = datetime.now()
         for run in rows:
             run.status = SourceRunStatus.failed
-            run.error_message = "Reclaimed: import did not finish (stale run)"
+            cursor = None
+            if preserve_batch_cursor and run.error_message and BATCH_CURSOR_PREFIX in run.error_message:
+                idx = run.error_message.index(BATCH_CURSOR_PREFIX)
+                cursor = run.error_message[idx:]
+            run.error_message = f"{error_message} {cursor}".strip() if cursor else error_message
             run.finished_at = now
         await self._session.commit()
         return len(rows)

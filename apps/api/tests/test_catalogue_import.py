@@ -9,12 +9,17 @@ import respx
 import httpx
 from httpx import ASGITransport, AsyncClient, Response
 
-from tcgscan_api.db.models import CardIdentity, Game, UserRole
+from tcgscan_api.db.models import CardIdentity, Game, SourceRun, SourceRunStatus, UserRole
 from tcgscan_api.db.session import get_session
 from tcgscan_api.main import app, fastapi_app
 from tcgscan_api.middleware.auth import AuthUser
 from tcgscan_api.repositories.source_runs import SourceRunsRepo
-from tcgscan_api.services.catalogue_import import start_full_catalogue_import
+from tcgscan_api.services.catalogue_import import (
+    STALE_RUN_ERROR_MESSAGE,
+    encode_batch_cursor,
+    recover_stale_catalogue_imports,
+    start_full_catalogue_import,
+)
 from tests.test_admin import _make_user, _patch_auth
 
 OPTCG_CARD = {
@@ -244,6 +249,157 @@ async def test_pokemon_duplicate_batch_updates_not_duplicates(sqlite_session: ob
 
     count = await SourceRunsRepo(sqlite_session).count_cards_by_source("pokemontcg")
     assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_running_pokemon_run_becomes_failed(sqlite_session: object) -> None:
+    from datetime import datetime, timedelta
+
+    stale = SourceRun(
+        source_key="pokemon",
+        game="pokemon",
+        run_type="full",
+        status=SourceRunStatus.running,
+        inserted_count=250,
+        updated_count=0,
+        skipped_count=0,
+        error_message=encode_batch_cursor(2, 250),
+        started_at=datetime.now() - timedelta(minutes=11),
+    )
+    sqlite_session.add(stale)
+    await sqlite_session.commit()
+
+    reclaimed = await SourceRunsRepo(sqlite_session).fail_stale_runs(
+        "pokemon",
+        older_than_seconds=600,
+        error_message=STALE_RUN_ERROR_MESSAGE,
+        preserve_batch_cursor=True,
+    )
+    assert reclaimed == 1
+    await sqlite_session.refresh(stale)
+    assert stale.status == SourceRunStatus.failed
+    assert stale.finished_at is not None
+    assert STALE_RUN_ERROR_MESSAGE in (stale.error_message or "")
+    assert "batch_cursor:page=2" in (stale.error_message or "")
+
+
+@pytest.mark.asyncio
+async def test_admin_sources_status_reclaims_stale_run(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    sqlite_session: object,
+) -> None:
+    from datetime import datetime, timedelta
+
+    stale = SourceRun(
+        source_key="pokemon",
+        game="pokemon",
+        run_type="full",
+        status=SourceRunStatus.running,
+        inserted_count=100,
+        error_message=encode_batch_cursor(3, 250),
+        started_at=datetime.now() - timedelta(minutes=11),
+    )
+    sqlite_session.add(stale)
+    await sqlite_session.commit()
+
+    status = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert status.status_code == 200
+    body = status.json()
+    pokemon = next(row for row in body["catalog_stats"] if row["source_key"] == "pokemon")
+    assert pokemon["current_run_status"] is None
+    assert pokemon["import_status_message"] == (
+        "Previous import timed out or disconnected. You can retry safely."
+    )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_retry_after_stale_run_resumes_import(sqlite_session: object) -> None:
+    from datetime import datetime, timedelta
+
+    stale = SourceRun(
+        source_key="pokemon",
+        game="pokemon",
+        run_type="full",
+        status=SourceRunStatus.failed,
+        inserted_count=1,
+        updated_count=0,
+        skipped_count=0,
+        error_message=f"{STALE_RUN_ERROR_MESSAGE} {encode_batch_cursor(2, 1)}",
+        finished_at=datetime.now() - timedelta(minutes=1),
+        started_at=datetime.now() - timedelta(minutes=15),
+    )
+    sqlite_session.add(stale)
+    sqlite_session.add(
+        CardIdentity(
+            game=Game.pokemon,
+            name="Pokemon Card 1",
+            set_code="base1",
+            number="1",
+            source="pokemontcg",
+            source_card_id="base1-1",
+        )
+    )
+    await sqlite_session.commit()
+
+    _mock_pokemon_pages(2, page_size=1)
+    resumed = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=False)
+    assert resumed.status == "success"
+    assert resumed.inserted_count + resumed.updated_count >= 1
+
+    count = await SourceRunsRepo(sqlite_session).count_cards_by_source("pokemontcg")
+    assert count == 2
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_stale_retry_updates_without_duplicates(sqlite_session: object) -> None:
+    from datetime import datetime, timedelta
+
+    _mock_pokemon_pages(1, page_size=1)
+    first = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=False, force=True)
+    assert first.status == "success"
+    assert first.inserted_count == 1
+
+    stale = SourceRun(
+        source_key="pokemon",
+        game="pokemon",
+        run_type="full",
+        status=SourceRunStatus.failed,
+        inserted_count=1,
+        updated_count=0,
+        skipped_count=0,
+        error_message=f"{STALE_RUN_ERROR_MESSAGE} {encode_batch_cursor(1, 1)}",
+        finished_at=datetime.now(),
+        started_at=datetime.now() - timedelta(minutes=15),
+    )
+    sqlite_session.add(stale)
+    await sqlite_session.commit()
+
+    second = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=False)
+    assert second.status == "success"
+    assert second.updated_count >= 1
+
+    count = await SourceRunsRepo(sqlite_session).count_cards_by_source("pokemontcg")
+    assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_recover_stale_catalogue_imports_reclaims_all_sources(sqlite_session: object) -> None:
+    from datetime import datetime, timedelta
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            started_at=datetime.now() - timedelta(minutes=11),
+        )
+    )
+    await sqlite_session.commit()
+    reclaimed = await recover_stale_catalogue_imports(sqlite_session)
+    assert reclaimed >= 1
 
 
 @pytest.mark.asyncio

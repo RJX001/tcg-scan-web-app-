@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.repositories.admin import AdminRepo
-from tcgscan_api.services.catalogue_import import catalogue_stats
+from tcgscan_api.services.catalogue_import import catalogue_stats, recover_stale_catalogue_imports
 from tcgscan_api.services.ebay_ingest import ebay_listing_stats
 from tcgscan_api.services.source_audit import build_sources_status
 
@@ -38,6 +38,7 @@ def _fallback_catalog_stats() -> dict[str, Any]:
                 "last_full_at": None,
                 "current_run_status": None,
                 "current_run_id": None,
+                "import_status_message": None,
             }
             for key, source in _CATALOG_SOURCES
         ]
@@ -71,6 +72,7 @@ async def get_admin_sources_status(session: AsyncSession) -> dict[str, Any]:
     payload = build_sources_status(data_health)
 
     try:
+        await recover_stale_catalogue_imports(session)
         payload.update(await catalogue_stats(session))
     except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
         await session.rollback()
