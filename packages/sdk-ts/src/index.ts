@@ -394,7 +394,7 @@ export async function getCard(cardId: string): Promise<CardDetailOut> {
 }
 
 export async function getCardBySlug(slug: string): Promise<CardOut> {
-  return apiFetch<CardOut>(`/v1/cards/slug/${encodeURIComponent(slug)}`);
+  return apiFetch<CardOut>(`/v1/cards/by-slug/${encodeURIComponent(slug)}`);
 }
 
 export async function getComps(

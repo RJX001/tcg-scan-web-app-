@@ -33,22 +33,86 @@ class CardsRepo:
     async def get_by_external(
         self, game: Game, set_code: str | None, number: str | None
     ) -> CardIdentity | None:
+        stmt = select(CardIdentity).where(CardIdentity.game == game)
+        if set_code is None:
+            stmt = stmt.where(CardIdentity.set_code.is_(None))
+        else:
+            stmt = stmt.where(func.lower(CardIdentity.set_code) == set_code.lower())
+        if number is None:
+            stmt = stmt.where(CardIdentity.number.is_(None))
+        else:
+            stmt = stmt.where(func.lower(CardIdentity.number) == number.lower())
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_by_source_card_id(
+        self, game: Game, source_card_id: str, *, source: str | None = None
+    ) -> CardIdentity | None:
         stmt = select(CardIdentity).where(
             CardIdentity.game == game,
-            CardIdentity.set_code == set_code,
-            CardIdentity.number == number,
+            func.lower(CardIdentity.source_card_id) == source_card_id.lower(),
         )
+        if source is not None:
+            stmt = stmt.where(CardIdentity.source == source)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_slug(self, slug: str) -> CardIdentity | None:
-        from tcgscan_api.services.slug import parse_card_slug
+        from tcgscan_api.services.slug import (
+            card_slug_from_identity,
+            card_slug_from_source,
+            match_game_prefix,
+            parse_card_slug,
+            slug_remainder,
+        )
+
+        slug_lower = slug.lower().strip()
+        game = match_game_prefix(slug_lower)
+        if game is None:
+            return None
+
+        remainder = slug_remainder(slug_lower)
+        if not remainder:
+            return None
+
+        def _matches(card: CardIdentity | None) -> CardIdentity | None:
+            if card is None:
+                return None
+            if card_slug_from_identity(card).lower() == slug_lower:
+                return card
+            return None
+
+        parts = remainder.split("-")
+        for i in range(1, len(parts)):
+            set_code = "-".join(parts[:i])
+            number = "-".join(parts[i:])
+            matched = _matches(await self.get_by_external(game, set_code, number))
+            if matched is not None:
+                return matched
+
+        for i in range(1, len(parts) + 1):
+            candidate_id = "-".join(parts[-i:])
+            matched = _matches(await self.get_by_source_card_id(game, candidate_id))
+            if matched is not None:
+                return matched
+
+        if len(parts) >= 2:
+            source = parts[0]
+            source_card_id = "-".join(parts[1:])
+            matched = _matches(
+                await self.get_by_source_card_id(game, source_card_id, source=source)
+            )
+            if matched is not None:
+                return matched
+            expected = card_slug_from_source(game, source, source_card_id)
+            if expected == slug_lower:
+                matched = await self.get_by_source_card_id(game, source_card_id, source=source)
+                if matched is not None:
+                    return matched
 
         try:
-            game_str, set_code, number = parse_card_slug(slug)
-            game = Game(game_str)
-        except (ValueError, KeyError):
+            game_str, set_code, number = parse_card_slug(slug_lower)
+            return _matches(await self.get_by_external(Game(game_str), set_code, number))
+        except ValueError:
             return None
-        return await self.get_by_external(game, set_code, number)
 
     async def search(
         self,

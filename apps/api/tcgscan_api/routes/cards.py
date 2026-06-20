@@ -63,6 +63,7 @@ async def card_search(
     )
 
 
+@router.get("/by-slug/{slug}", response_model=CardOut)
 @router.get("/slug/{slug}", response_model=CardOut)
 async def card_by_slug(slug: str, session: AsyncSession = Depends(get_session)) -> CardOut:
     key = f"cards:slug:{slug}"

@@ -3,6 +3,7 @@
 import { Button } from "@tcgscan/ui";
 import type { CardOut } from "@tcgscan/sdk-ts";
 import { searchCatalog } from "@tcgscan/sdk-ts";
+import { cardDetailHref } from "@/lib/card-slug";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -126,7 +127,7 @@ export function CardsClient() {
           return (
             <li key={card.id}>
               <Link
-                href={`/card/${card.slug}`}
+                href={cardDetailHref(card)}
                 className="flex h-full flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm"
               >
                 <div className="relative aspect-[3/4] bg-zinc-50">
