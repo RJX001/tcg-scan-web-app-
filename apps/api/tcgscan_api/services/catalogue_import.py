@@ -134,16 +134,26 @@ async def _upsert_rows(
 
 
 async def recover_stale_catalogue_imports(session: AsyncSession) -> int:
-    """Mark abandoned catalogue import runs as failed so admin UI can recover."""
+    """Mark abandoned catalogue import runs as failed so admin UI can recover.
+
+    Best-effort and defensive: a failure for one source is logged and skipped so
+    the admin status endpoint always renders. Never raises.
+    """
     runs = SourceRunsRepo(session)
     reclaimed = 0
     for source_key in SOURCE_GAMES:
-        reclaimed += await runs.fail_stale_runs(
-            source_key,
-            older_than_seconds=STALE_RUN_SECONDS,
-            error_message=STALE_RUN_ERROR_MESSAGE,
-            preserve_batch_cursor=True,
-        )
+        try:
+            reclaimed += await runs.fail_stale_runs(
+                source_key,
+                older_than_seconds=STALE_RUN_SECONDS,
+                error_message=STALE_RUN_ERROR_MESSAGE,
+                preserve_batch_cursor=True,
+            )
+        except Exception as exc:  # pragma: no cover - fail_stale_runs is itself guarded
+            log.warning(
+                "catalogue_import.stale_recovery_failed", source=source_key, error=str(exc)
+            )
+            continue
     if reclaimed:
         log.info("catalogue_import.stale_runs_reclaimed", count=reclaimed)
     return reclaimed

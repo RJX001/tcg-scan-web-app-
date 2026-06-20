@@ -58,28 +58,49 @@ def _fallback_ebay_stats() -> dict[str, Any]:
     }
 
 
+async def _safe_rollback(session: AsyncSession) -> None:
+    try:
+        await session.rollback()
+    except Exception as exc:  # pragma: no cover - rollback should not raise
+        log.warning("admin_sources.rollback_failed", error=str(exc))
+
+
 async def get_admin_sources_status(session: AsyncSession) -> dict[str, Any]:
     warnings: list[str] = []
 
     try:
         data_health = await AdminRepo(session).data_health()
     except SQLAlchemyError as exc:
-        await session.rollback()
+        await _safe_rollback(session)
+        log.warning("admin_sources.data_health_failed", error=str(exc))
+        data_health = []
+        warnings.append("data_health_unavailable")
+    except Exception as exc:
+        await _safe_rollback(session)
         log.warning("admin_sources.data_health_failed", error=str(exc))
         data_health = []
         warnings.append("data_health_unavailable")
 
     payload = build_sources_status(data_health)
 
+    # Stale-run cleanup is best-effort and isolated: if it fails we roll back so
+    # the session is clean for the stats queries below, and the page still loads.
     try:
         await recover_stale_catalogue_imports(session)
+    except Exception as exc:
+        await _safe_rollback(session)
+        log.warning("admin_sources.stale_cleanup_failed", error=str(exc))
+        warnings.append("stale_cleanup_skipped")
+
+    try:
         payload.update(await catalogue_stats(session))
     except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
-        await session.rollback()
+        await _safe_rollback(session)
         log.warning("admin_sources.catalog_stats_failed", error=str(exc))
         payload.update(_fallback_catalog_stats())
         warnings.append("catalog_stats_degraded")
     except Exception as exc:
+        await _safe_rollback(session)
         log.warning("admin_sources.catalog_stats_failed", error=str(exc))
         payload.update(_fallback_catalog_stats())
         warnings.append("catalog_stats_degraded")
@@ -87,11 +108,12 @@ async def get_admin_sources_status(session: AsyncSession) -> dict[str, Any]:
     try:
         payload.update(await ebay_listing_stats(session))
     except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
-        await session.rollback()
+        await _safe_rollback(session)
         log.warning("admin_sources.ebay_stats_failed", error=str(exc))
         payload.update(_fallback_ebay_stats())
         warnings.append("ebay_stats_unavailable")
     except Exception as exc:
+        await _safe_rollback(session)
         log.warning("admin_sources.ebay_stats_failed", error=str(exc))
         payload.update(_fallback_ebay_stats())
         warnings.append("ebay_stats_unavailable")

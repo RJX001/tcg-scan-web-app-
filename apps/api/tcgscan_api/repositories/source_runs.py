@@ -3,15 +3,41 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcgscan_api.db.models import CardIdentity, SourceRun, SourceRunStatus
 
+log = structlog.get_logger()
+
 BATCH_CURSOR_PREFIX = "batch_cursor:"
+
+_UNFINISHED_STATUSES = (
+    SourceRunStatus.queued,
+    SourceRunStatus.started,
+    SourceRunStatus.running,
+)
+
+
+def _run_age_seconds(started_at: datetime | None) -> float | None:
+    """Age of a run in seconds, comparing against a matching clock basis.
+
+    Postgres ``timestamptz`` returns timezone-aware datetimes while the app and
+    SQLite use naive ``datetime.now()`` values. Comparing the two directly raises
+    ``TypeError``; matching the basis per value avoids that crash entirely.
+    """
+    if started_at is None:
+        return None
+    try:
+        if started_at.tzinfo is not None:
+            return (datetime.now(timezone.utc) - started_at).total_seconds()
+        return (datetime.now() - started_at).total_seconds()
+    except (TypeError, ValueError, OverflowError):  # pragma: no cover - defensive
+        return None
 
 
 class SourceRunsRepo:
@@ -121,7 +147,13 @@ class SourceRunsRepo:
 
     async def _rollback_on_db_error(self, exc: Exception) -> None:
         if isinstance(exc, (ProgrammingError, DBAPIError, SQLAlchemyError)):
+            await self._safe_rollback()
+
+    async def _safe_rollback(self) -> None:
+        try:
             await self._session.rollback()
+        except Exception as exc:  # pragma: no cover - rollback should not raise
+            log.warning("source_runs.rollback_failed", error=str(exc))
 
     async def last_success(self, source_key: str, *, run_type: str | None = None) -> SourceRun | None:
         stmt = select(SourceRun).where(
@@ -183,6 +215,26 @@ class SourceRunsRepo:
         run.started_at = datetime.now()
         await self._session.commit()
 
+    @staticmethod
+    def _is_stale(started_at: datetime | None, older_than_seconds: int) -> bool:
+        """A run is stale if it started more than ``older_than_seconds`` ago.
+
+        Timezone-safe (handles aware Postgres timestamptz and naive SQLite/local
+        values). A missing ``started_at`` is treated as stale so an abandoned run
+        never blocks future imports forever.
+        """
+        age = _run_age_seconds(started_at)
+        if age is None:
+            return True
+        return age >= max(0, older_than_seconds)
+
+    @staticmethod
+    def _preserved_cursor(error_message: str | None) -> str | None:
+        if error_message and BATCH_CURSOR_PREFIX in error_message:
+            idx = error_message.index(BATCH_CURSOR_PREFIX)
+            return error_message[idx:]
+        return None
+
     async def fail_stale_runs(
         self,
         source_key: str,
@@ -195,33 +247,61 @@ class SourceRunsRepo:
 
         Prevents an interrupted import (deploy/restart) from blocking future
         imports forever by leaving a run stuck in queued/started/running.
+
+        Defensive by design: this is invoked from the admin status endpoint and
+        must never raise. Any DB or data issue is logged and swallowed so the
+        page still renders.
         """
-        cutoff = datetime.now() - timedelta(seconds=older_than_seconds)
+        # Filter only by status in SQL; do the age comparison in Python so a
+        # naive/aware mismatch against a timestamptz column can never crash.
         stmt = select(SourceRun).where(
             SourceRun.source_key == source_key,
-            SourceRun.status.in_(
-                [SourceRunStatus.queued, SourceRunStatus.started, SourceRunStatus.running]
-            ),
-            SourceRun.started_at < cutoff,
+            SourceRun.status.in_(_UNFINISHED_STATUSES),
         )
         try:
             rows = list((await self._session.execute(stmt)).scalars().all())
         except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
             await self._rollback_on_db_error(exc)
+            log.warning("source_runs.fail_stale_runs_query_failed", source=source_key, error=str(exc))
             return 0
-        if not rows:
+        except Exception as exc:  # pragma: no cover - unexpected driver error
+            await self._safe_rollback()
+            log.warning("source_runs.fail_stale_runs_query_failed", source=source_key, error=str(exc))
             return 0
+
         now = datetime.now()
+        reclaimed = 0
         for run in rows:
-            run.status = SourceRunStatus.failed
-            cursor = None
-            if preserve_batch_cursor and run.error_message and BATCH_CURSOR_PREFIX in run.error_message:
-                idx = run.error_message.index(BATCH_CURSOR_PREFIX)
-                cursor = run.error_message[idx:]
-            run.error_message = f"{error_message} {cursor}".strip() if cursor else error_message
-            run.finished_at = now
-        await self._session.commit()
-        return len(rows)
+            try:
+                if not self._is_stale(run.started_at, older_than_seconds):
+                    continue
+                run.status = SourceRunStatus.failed
+                cursor = self._preserved_cursor(run.error_message) if preserve_batch_cursor else None
+                run.error_message = (
+                    f"{error_message} {cursor}".strip() if cursor else error_message
+                )[:1024]
+                run.finished_at = now
+                reclaimed += 1
+            except Exception as exc:  # pragma: no cover - per-row safety
+                log.warning(
+                    "source_runs.fail_stale_runs_row_failed", source=source_key, error=str(exc)
+                )
+                continue
+
+        if reclaimed == 0:
+            return 0
+
+        try:
+            await self._session.commit()
+        except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
+            await self._rollback_on_db_error(exc)
+            log.warning("source_runs.fail_stale_runs_commit_failed", source=source_key, error=str(exc))
+            return 0
+        except Exception as exc:  # pragma: no cover - unexpected driver error
+            await self._safe_rollback()
+            log.warning("source_runs.fail_stale_runs_commit_failed", source=source_key, error=str(exc))
+            return 0
+        return reclaimed
 
     async def active_run(self, source_key: str) -> SourceRun | None:
         stmt = (

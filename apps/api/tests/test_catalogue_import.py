@@ -402,6 +402,178 @@ async def test_recover_stale_catalogue_imports_reclaims_all_sources(sqlite_sessi
     assert reclaimed >= 1
 
 
+def test_is_stale_handles_null_and_timezones() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    threshold = 600  # 10 minutes
+    # Null started_at must not crash and is treated as stale.
+    assert SourceRunsRepo._is_stale(None, threshold) is True
+    # Timezone-aware older value is stale.
+    aware_old = datetime.now(timezone.utc) - timedelta(minutes=30)
+    assert SourceRunsRepo._is_stale(aware_old, threshold) is True
+    # Timezone-naive (local) older value is stale.
+    naive_old = datetime.now() - timedelta(minutes=30)
+    assert SourceRunsRepo._is_stale(naive_old, threshold) is True
+    # Recent run is not stale (aware + naive). Comparing aware vs naive-now must
+    # not raise TypeError.
+    assert SourceRunsRepo._is_stale(datetime.now(timezone.utc), threshold) is False
+    assert SourceRunsRepo._is_stale(datetime.now(), threshold) is False
+
+
+@pytest.mark.asyncio
+async def test_status_returns_200_with_stale_running_run(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    sqlite_session: object,
+) -> None:
+    from datetime import datetime, timedelta
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            game="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            inserted_count=13750,
+            error_message=encode_batch_cursor(55, 250),
+            started_at=datetime.now() - timedelta(minutes=11),
+        )
+    )
+    await sqlite_session.commit()
+
+    r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert r.status_code == 200
+    body = r.json()
+    pokemon = next(row for row in body["catalog_stats"] if row["source_key"] == "pokemon")
+    # Stale run reclaimed → no longer shown as running.
+    assert pokemon["current_run_status"] is None
+    assert pokemon["import_status_message"] == (
+        "Previous import timed out or disconnected. You can retry safely."
+    )
+
+    run = await SourceRunsRepo(sqlite_session).last_failed("pokemon", run_type="full")
+    assert run is not None
+    assert run.status.value == "failed"
+    assert run.finished_at is not None
+    assert STALE_RUN_ERROR_MESSAGE in (run.error_message or "")
+
+
+@pytest.mark.asyncio
+async def test_status_returns_200_with_timezone_aware_started_at(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    sqlite_session: object,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            game="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=20),
+        )
+    )
+    await sqlite_session.commit()
+
+    r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert r.status_code == 200
+    assert "catalog_stats" in r.json()
+
+
+@pytest.mark.asyncio
+async def test_status_returns_200_when_stale_cleanup_throws(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def boom(_session: object) -> int:
+        raise RuntimeError("stale cleanup exploded")
+
+    monkeypatch.setattr(
+        "tcgscan_api.services.admin_sources_status.recover_stale_catalogue_imports",
+        boom,
+    )
+
+    r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert "catalog_stats" in body
+    assert "stale_cleanup_skipped" in (body.get("status_warnings") or [])
+
+
+@pytest.mark.asyncio
+async def test_fail_stale_runs_survives_commit_failure(
+    sqlite_session: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import datetime, timedelta
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            game="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            started_at=datetime.now() - timedelta(minutes=11),
+        )
+    )
+    await sqlite_session.commit()
+
+    repo = SourceRunsRepo(sqlite_session)
+    call_count = {"n": 0}
+    original_commit = sqlite_session.commit
+
+    async def flaky_commit(*args: object, **kwargs: object) -> None:
+        call_count["n"] += 1
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(sqlite_session, "commit", flaky_commit)
+    # Must not raise even though the commit blows up.
+    reclaimed = await repo.fail_stale_runs(
+        "pokemon",
+        older_than_seconds=600,
+        error_message=STALE_RUN_ERROR_MESSAGE,
+        preserve_batch_cursor=True,
+    )
+    assert reclaimed == 0
+    monkeypatch.setattr(sqlite_session, "commit", original_commit)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_pokemon_stuck_running_becomes_failed_when_stale(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    sqlite_session: object,
+) -> None:
+    from datetime import datetime, timedelta
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            game="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            inserted_count=13750,
+            error_message=encode_batch_cursor(55, 250),
+            started_at=datetime.now() - timedelta(minutes=15),
+        )
+    )
+    await sqlite_session.commit()
+
+    r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert r.status_code == 200
+
+    run = await SourceRunsRepo(sqlite_session).last_failed("pokemon", run_type="full")
+    assert run is not None
+    assert run.status == SourceRunStatus.failed
+    assert run.finished_at is not None
+    # Batch cursor preserved so the next import can resume safely.
+    assert "batch_cursor:page=55" in (run.error_message or "")
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_pokemon_full_import_dry_run(sqlite_session: object) -> None:
