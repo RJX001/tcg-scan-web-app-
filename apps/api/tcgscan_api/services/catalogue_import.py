@@ -61,29 +61,58 @@ def _public_status(status: SourceRunStatus | str) -> str:
     return value
 
 
-async def _fetch_full_normalized(source_key: str, *, limit: int | None) -> list[dict[str, Any]]:
+@dataclass
+class FetchResult:
+    cards: list[dict[str, Any]]
+    optional_skipped: list[str] | None = None
+
+
+def _one_piece_import_message(imported: int, optional_skipped: list[str] | None) -> str:
+    skipped = optional_skipped or []
+    if skipped and any("promo" in label.lower() for label in skipped):
+        return "Imported set/ST cards. Promo endpoint unavailable/skipped."
+    if skipped:
+        labels = ", ".join(skipped)
+        return f"Imported {imported} catalogue cards. Optional endpoints skipped: {labels}."
+    return f"Imported {imported} catalogue cards"
+
+
+def _optional_skip_error_message(optional_skipped: list[str] | None) -> str | None:
+    if not optional_skipped:
+        return None
+    labels = ", ".join(optional_skipped)
+    if any("promo" in label.lower() for label in optional_skipped):
+        return "Optional promo endpoint unavailable/skipped."
+    return f"Optional endpoints skipped: {labels}."
+
+
+async def _fetch_full_normalized(source_key: str, *, limit: int | None) -> FetchResult:
     if source_key == "pokemon":
         pokemon_client = PokemonClient()
         try:
-            return await pokemon_client.iter_cards(limit=limit)
+            return FetchResult(cards=await pokemon_client.iter_cards(limit=limit))
         finally:
             await pokemon_client.aclose()
     if source_key == "scryfall":
         scryfall_client = ScryfallClient()
         try:
-            return await scryfall_client.iter_cards(limit=limit)
+            return FetchResult(cards=await scryfall_client.iter_cards(limit=limit))
         finally:
             await scryfall_client.aclose()
     if source_key == "ygopro":
         ygo_client = YgoProDeckClient()
         try:
-            return await ygo_client.iter_all_cards(limit=limit)
+            return FetchResult(cards=await ygo_client.iter_all_cards(limit=limit))
         finally:
             await ygo_client.aclose()
     if source_key == "one_piece":
         op_client = OnePieceClient()
         try:
-            return await op_client.iter_all_cards(limit=limit)
+            result = await op_client.iter_all_cards(limit=limit)
+            return FetchResult(
+                cards=result.cards,
+                optional_skipped=list(result.skipped_optional_endpoints),
+            )
         finally:
             await op_client.aclose()
     raise ValueError(f"full import not supported for source: {source_key}")
@@ -96,9 +125,10 @@ async def _process_rows(
     normalized: list[dict[str, Any]],
     dry_run: bool,
     started_at: datetime,
+    optional_skipped: list[str] | None = None,
 ) -> ImportResult:
     runs = SourceRunsRepo(session)
-    skipped = 0
+    skipped = len(optional_skipped or [])
     rows: list[dict[str, object]] = []
     for item in normalized:
         if not item.get("source_card_id") or not item.get("name"):
@@ -117,8 +147,11 @@ async def _process_rows(
             inserted_count=len(rows),
             updated_count=0,
             skipped_count=skipped,
-            error_message="dry_run",
+            error_message=_optional_skip_error_message(optional_skipped) or "dry_run",
             started_at=started_at,
+        )
+        message = _one_piece_import_message(len(rows), optional_skipped) if optional_skipped else (
+            f"Dry run: {len(rows)} cards ready to upsert"
         )
         return ImportResult(
             source_run_id=str(finished.id),
@@ -126,7 +159,7 @@ async def _process_rows(
             inserted_count=len(rows),
             updated_count=0,
             skipped_count=skipped,
-            message=f"Dry run: {len(rows)} cards ready to upsert",
+            message=message,
             dry_run=True,
         )
 
@@ -152,7 +185,14 @@ async def _process_rows(
         inserted_count=inserted_total,
         updated_count=updated_total,
         skipped_count=skipped,
+        error_message=_optional_skip_error_message(optional_skipped),
         started_at=started_at,
+    )
+    imported = inserted_total + updated_total
+    message = (
+        _one_piece_import_message(imported, optional_skipped)
+        if optional_skipped
+        else f"Imported {imported} catalogue cards"
     )
     return ImportResult(
         source_run_id=str(finished.id),
@@ -160,7 +200,7 @@ async def _process_rows(
         inserted_count=inserted_total,
         updated_count=updated_total,
         skipped_count=skipped,
-        message=f"Imported {inserted_total + updated_total} catalogue cards",
+        message=message,
         dry_run=False,
     )
 
@@ -200,13 +240,14 @@ async def _execute_full_catalogue_import(
     inserted = updated = skipped = 0
     try:
         await runs.set_status(run_id, SourceRunStatus.running)
-        normalized = await _fetch_full_normalized(source_key, limit=limit)
+        fetched = await _fetch_full_normalized(source_key, limit=limit)
         result = await _process_rows(
             session,
             run_id,
-            normalized=normalized,
+            normalized=fetched.cards,
             dry_run=dry_run,
             started_at=started_at,
+            optional_skipped=fetched.optional_skipped,
         )
         log.info(
             "catalogue_import.complete",
@@ -278,13 +319,14 @@ async def start_full_catalogue_import(
 
     try:
         fetch_limit = (limit or 100) if dry_run else limit
-        normalized = await _fetch_full_normalized(source_key, limit=fetch_limit)
+        fetched = await _fetch_full_normalized(source_key, limit=fetch_limit)
         return await _process_rows(
             session,
             run_id,
-            normalized=normalized,
+            normalized=fetched.cards,
             dry_run=dry_run,
             started_at=started_at,
+            optional_skipped=fetched.optional_skipped,
         )
     except Exception as exc:
         log.warning("catalogue_import.failed", source=source_key, error=str(exc))

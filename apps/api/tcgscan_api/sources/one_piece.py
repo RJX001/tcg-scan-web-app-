@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
+import structlog
+
 from tcgscan_api.sources.http_client import SourceHttpClient
+
+log = structlog.get_logger()
 
 DEFAULT_BASE_URL = "https://optcgapi.com"
 
@@ -37,6 +43,25 @@ def normalize_card(raw: dict[str, Any]) -> dict[str, Any]:
         "trigger": raw.get("trigger"),
         "image_url": image,
     }
+
+
+@dataclass(frozen=True)
+class OnePieceCatalogResult:
+    cards: list[dict[str, Any]]
+    skipped_optional_endpoints: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def optional_skip_count(self) -> int:
+        return len(self.skipped_optional_endpoints)
+
+    @property
+    def optional_skip_message(self) -> str | None:
+        if not self.skipped_optional_endpoints:
+            return None
+        labels = ", ".join(self.skipped_optional_endpoints)
+        if any("promo" in label.lower() for label in self.skipped_optional_endpoints):
+            return "Promo endpoint unavailable/skipped."
+        return f"Optional endpoints unavailable/skipped: {labels}."
 
 
 class OnePieceClient:
@@ -88,17 +113,43 @@ class OnePieceClient:
     async def get_don_cards(self) -> list[dict[str, Any]]:
         return await self._get_list("/api/allDonCards/", cache_key="source:optcg:all_don_cards")
 
-    async def iter_all_cards(self, *, limit: int | None = None) -> list[dict[str, Any]]:
+    async def _fetch_endpoint_rows(
+        self,
+        fetch: Any,
+        *,
+        label: str,
+        optional: bool,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        try:
+            return await fetch(), None
+        except httpx.HTTPStatusError as exc:
+            if not optional:
+                raise
+            skip_label = f"{label} ({exc.response.status_code})"
+            log.info("one_piece.optional_endpoint_skipped", endpoint=label, status=exc.response.status_code)
+            return [], skip_label
+        except httpx.HTTPError as exc:
+            if not optional:
+                raise
+            skip_label = f"{label} (unavailable)"
+            log.info("one_piece.optional_endpoint_skipped", endpoint=label, error=str(exc))
+            return [], skip_label
+
+    async def iter_all_cards(self, *, limit: int | None = None) -> OnePieceCatalogResult:
         seen: set[str] = set()
         cards: list[dict[str, Any]] = []
-        fetchers = [
-            self.get_all_set_cards,
-            self.get_starter_deck_cards,
-            self.get_promo_cards,
-            self.get_don_cards,
+        skipped_optional: list[str] = []
+        fetchers: list[tuple[Any, str, bool]] = [
+            (self.get_all_set_cards, "allSetCards", False),
+            (self.get_starter_deck_cards, "allSTCards", False),
+            (self.get_promo_cards, "allPromoCards", True),
+            (self.get_don_cards, "allDonCards", True),
         ]
-        for fetch in fetchers:
-            rows = await fetch()
+        for fetch, label, optional in fetchers:
+            rows, skip_label = await self._fetch_endpoint_rows(fetch, label=label, optional=optional)
+            if skip_label:
+                skipped_optional.append(skip_label)
+                continue
             for raw in rows:
                 normalized = normalize_card(raw)
                 sid = str(normalized.get("source_card_id") or "")
@@ -107,8 +158,8 @@ class OnePieceClient:
                 seen.add(sid)
                 cards.append(normalized)
                 if limit is not None and len(cards) >= limit:
-                    return cards
-        return cards
+                    return OnePieceCatalogResult(cards=cards, skipped_optional_endpoints=tuple(skipped_optional))
+        return OnePieceCatalogResult(cards=cards, skipped_optional_endpoints=tuple(skipped_optional))
 
     async def diagnostic(self) -> dict[str, Any]:
         try:

@@ -82,6 +82,13 @@ def _mock_one_piece_endpoints() -> None:
     respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
 
 
+def _mock_one_piece_endpoints_promo_404() -> None:
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(404, json={"detail": "Not found"}))
+    respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
+
+
 @pytest_asyncio.fixture
 async def api_client(sqlite_session: object) -> AsyncIterator[AsyncClient]:
     async def override_session() -> AsyncIterator[object]:
@@ -159,6 +166,49 @@ async def test_one_piece_full_import_dry_run(sqlite_session: object) -> None:
     result = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=True)
     assert result.status == "success"
     assert result.inserted_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_one_piece_full_import_succeeds_when_promo_404(sqlite_session: object) -> None:
+    _mock_one_piece_endpoints_promo_404()
+    result = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False, force=True)
+    assert result.status == "success"
+    assert result.inserted_count == 1
+    assert result.skipped_count >= 1
+    assert "Promo endpoint unavailable/skipped" in result.message
+
+    count = await SourceRunsRepo(sqlite_session).count_cards_by_source("optcgapi")
+    assert count == 1
+
+    run = await SourceRunsRepo(sqlite_session).last_success("one_piece", run_type="full")
+    assert run is not None
+    assert run.status.value == "success"
+    assert run.run_type == "full"
+    assert run.finished_at is not None
+    assert run.skipped_count >= 1
+    assert run.error_message is not None
+    assert "promo" in run.error_message.lower()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_one_piece_import_route_success_when_promo_404(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+) -> None:
+    _mock_one_piece_endpoints_promo_404()
+    r = await api_client.post(
+        "/v1/admin/sources/import/one-piece",
+        params={"force": "true"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "success"
+    assert body["inserted_count"] == 1
+    assert body["skipped_count"] >= 1
+    assert "Promo endpoint unavailable/skipped" in body["message"]
 
 
 @pytest.mark.asyncio

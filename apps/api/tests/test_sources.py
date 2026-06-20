@@ -56,6 +56,13 @@ OPTCG_CARD = [
 ]
 
 
+def _mock_one_piece_endpoints_promo_404() -> None:
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD[0]]))
+    respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(404, json={"detail": "Not found"}))
+    respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
+
+
 @pytest_asyncio.fixture
 async def api_client(sqlite_session: object) -> AsyncIterator[AsyncClient]:
     async def override_session() -> AsyncIterator[object]:
@@ -199,6 +206,21 @@ async def test_ygopro_client_search_mocked() -> None:
         cards = await client.search_card("Dark Magician")
         assert len(cards) == 1
         assert cards[0]["name"] == "Dark Magician"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_one_piece_iter_all_cards_skips_promo_404() -> None:
+    _mock_one_piece_endpoints_promo_404()
+    client = OnePieceClient()
+    try:
+        result = await client.iter_all_cards()
+        assert len(result.cards) == 1
+        assert result.cards[0]["source_card_id"] == "OP01-077"
+        assert result.optional_skip_count == 1
+        assert any("promo" in label.lower() for label in result.skipped_optional_endpoints)
     finally:
         await client.aclose()
 

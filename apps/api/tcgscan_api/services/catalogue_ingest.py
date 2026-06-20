@@ -16,7 +16,7 @@ from tcgscan_api.repositories.source_runs import SourceRunsRepo
 from tcgscan_api.services.catalogue_normalizer import to_card_identity_row
 from tcgscan_api.sources.dragon_ball_fusion_world import DragonBallFusionWorldClient
 from tcgscan_api.sources.dragon_ball_masters import DragonBallMastersClient
-from tcgscan_api.sources.one_piece import OnePieceClient, normalize_card as normalize_one_piece
+from tcgscan_api.sources.one_piece import OnePieceClient
 from tcgscan_api.sources.pokemon import PokemonClient
 from tcgscan_api.sources.scryfall import ScryfallClient
 from tcgscan_api.sources.ygoprodeck import YgoProDeckClient
@@ -37,33 +37,38 @@ class IngestResult:
     dry_run: bool = False
 
 
-async def _fetch_normalized(source_key: str, *, limit: int) -> tuple[list[dict[str, Any]], str | None]:
+async def _fetch_normalized(
+    source_key: str, *, limit: int
+) -> tuple[list[dict[str, Any]], str | None, list[str] | None]:
     if source_key == "pokemon":
         pokemon_client = PokemonClient()
         try:
-            return await pokemon_client.iter_cards(limit=limit), None
+            return await pokemon_client.iter_cards(limit=limit), None, None
         finally:
             await pokemon_client.aclose()
 
     if source_key == "scryfall":
         scryfall_client = ScryfallClient()
         try:
-            return await scryfall_client.iter_cards(limit=limit), None
+            return await scryfall_client.iter_cards(limit=limit), None, None
         finally:
             await scryfall_client.aclose()
 
     if source_key == "ygopro":
         ygo_client = YgoProDeckClient()
         try:
-            return (await ygo_client.iter_all_cards(limit=limit))[:limit], None
+            return (await ygo_client.iter_all_cards(limit=limit))[:limit], None, None
         finally:
             await ygo_client.aclose()
 
     if source_key == "one_piece":
         op_client = OnePieceClient()
         try:
-            rows = await op_client.iter_all_cards(limit=limit)
-            return rows[:limit] if limit else rows, None
+            result = await op_client.iter_all_cards(limit=limit)
+            rows = result.cards[:limit] if limit else result.cards
+            optional_skipped = list(result.skipped_optional_endpoints) or None
+            skip_message = result.optional_skip_message
+            return rows, skip_message, optional_skipped
         finally:
             await op_client.aclose()
 
@@ -72,8 +77,8 @@ async def _fetch_normalized(source_key: str, *, limit: int) -> tuple[list[dict[s
         try:
             diag = await fw_client.diagnostic()
             if diag.get("status") not in {"success", "partial"}:
-                return [], str(diag.get("message") or "Bandai Fusion World adapter not implemented")
-            return [], "No catalogue rows available yet for Bandai Fusion World"
+                return [], str(diag.get("message") or "Bandai Fusion World adapter not implemented"), None
+            return [], "No catalogue rows available yet for Bandai Fusion World", None
         finally:
             await fw_client.aclose()
 
@@ -82,8 +87,8 @@ async def _fetch_normalized(source_key: str, *, limit: int) -> tuple[list[dict[s
         try:
             diag = await masters_client.diagnostic()
             if diag.get("status") not in {"success", "partial"}:
-                return [], str(diag.get("message") or "Bandai Masters adapter not implemented")
-            return [], "No catalogue rows available yet for Bandai Masters"
+                return [], str(diag.get("message") or "Bandai Masters adapter not implemented"), None
+            return [], "No catalogue rows available yet for Bandai Masters", None
         finally:
             await masters_client.aclose()
 
@@ -115,9 +120,10 @@ async def run_catalogue_ingest(
     inserted = 0
     updated = 0
     skipped = 0
+    optional_skipped: list[str] | None = None
 
     try:
-        normalized, skip_message = await _fetch_normalized(source_key, limit=limit)
+        normalized, skip_message, optional_skipped = await _fetch_normalized(source_key, limit=limit)
         if skip_message and not normalized:
             finished = await runs.finish(
                 run.id,
@@ -139,6 +145,7 @@ async def run_catalogue_ingest(
             )
 
         rows = []
+        skipped = len(optional_skipped or [])
         for item in normalized:
             if not item.get("source_card_id") or not item.get("name"):
                 skipped += 1
@@ -156,8 +163,13 @@ async def run_catalogue_ingest(
                 inserted_count=len(rows),
                 updated_count=0,
                 skipped_count=skipped,
-                error_message="dry_run",
+                error_message=skip_message or "dry_run",
                 started_at=started_at,
+            )
+            message = (
+                f"Ingested sample set/ST cards. {skip_message}"
+                if skip_message
+                else f"Dry run: {len(rows)} cards ready to upsert"
             )
             return IngestResult(
                 source_run_id=str(finished.id),
@@ -165,7 +177,7 @@ async def run_catalogue_ingest(
                 inserted_count=len(rows),
                 updated_count=0,
                 skipped_count=skipped,
-                message=f"Dry run: {len(rows)} cards ready to upsert",
+                message=message,
                 dry_run=True,
             )
 
@@ -176,7 +188,13 @@ async def run_catalogue_ingest(
             inserted_count=inserted,
             updated_count=updated,
             skipped_count=skipped,
+            error_message=skip_message,
             started_at=started_at,
+        )
+        message = (
+            f"Ingested set/ST cards. {skip_message}"
+            if skip_message
+            else f"Ingested {inserted + updated} cards from {source_key}"
         )
         return IngestResult(
             source_run_id=str(finished.id),
@@ -184,7 +202,7 @@ async def run_catalogue_ingest(
             inserted_count=inserted,
             updated_count=updated,
             skipped_count=skipped,
-            message=f"Ingested {inserted + updated} cards from {source_key}",
+            message=message,
             dry_run=False,
         )
     except Exception as exc:

@@ -88,6 +88,25 @@ async def test_ingest_dry_run_does_not_write_db(sqlite_session: object) -> None:
     assert cards == []
 
 
+def _mock_one_piece_endpoints_promo_404() -> None:
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(404, json={"detail": "Not found"}))
+    respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_ingest_sample_succeeds_when_promo_404(sqlite_session: object) -> None:
+    _mock_one_piece_endpoints_promo_404()
+    result = await run_catalogue_ingest(sqlite_session, "one_piece", limit=10, dry_run=False)
+    assert result.status == "success"
+    assert result.skipped_count >= 1
+    assert "Promo endpoint unavailable/skipped" in result.message
+    cards = await CardsRepo(sqlite_session).search(q="Perona", limit=5)
+    assert len(cards) == 1
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_ingest_sample_upserts_cards(sqlite_session: object) -> None:
