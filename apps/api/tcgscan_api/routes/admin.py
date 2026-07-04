@@ -22,7 +22,10 @@ from tcgscan_api.services.qdrant import get_qdrant
 from tcgscan_api.services.roles import require_admin, require_owner, require_senior
 from tcgscan_api.services.admin_sources_status import get_admin_sources_status
 from tcgscan_api.services.catalogue_ingest import run_catalogue_ingest
-from tcgscan_api.services.catalogue_import import start_full_catalogue_import
+from tcgscan_api.services.catalogue_import import (
+    recover_stale_catalogue_imports,
+    start_full_catalogue_import,
+)
 from tcgscan_api.services.ebay_ingest import run_ebay_ingest
 from tcgscan_api.services.source_audit import (
     test_cardmarket_connection,
@@ -185,6 +188,21 @@ async def admin_sources_status(
 ) -> dict[str, Any]:
     await _admin_user(request, session)
     return await get_admin_sources_status(session)
+
+
+@router.post("/sources/runs/cleanup-stale")
+async def admin_cleanup_stale_runs(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Manually reclaim import runs stuck in queued/started/running.
+
+    The same cleanup also runs automatically inside /sources/status, so a page
+    refresh recovers on its own; this endpoint exists for explicit recovery.
+    """
+    await _admin_user(request, session)
+    reclaimed = await recover_stale_catalogue_imports(session)
+    return {"reclaimed_count": reclaimed, "status": "ok"}
 
 
 async def _run_ingest(

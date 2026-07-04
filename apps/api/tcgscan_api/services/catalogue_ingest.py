@@ -239,14 +239,32 @@ async def catalogue_stats(session: AsyncSession) -> dict[str, Any]:
     }
     stats: list[dict[str, Any]] = []
     for source_key, catalog_source in sources.items():
-        last = await runs.last_success(source_key)
-        stats.append(
-            {
-                "source_key": source_key,
-                "catalog_source": catalog_source,
-                "card_count": await runs.count_cards_by_source(catalog_source),
-                "last_success_at": last.finished_at.isoformat() if last and last.finished_at else None,
-                "last_run_id": str(last.id) if last else None,
-            }
-        )
+        try:
+            last = await runs.last_success(source_key)
+            stats.append(
+                {
+                    "source_key": source_key,
+                    "catalog_source": catalog_source,
+                    "card_count": await runs.count_cards_by_source(catalog_source),
+                    "last_success_at": (
+                        last.finished_at.isoformat() if last and last.finished_at else None
+                    ),
+                    "last_run_id": str(last.id) if last else None,
+                }
+            )
+        except Exception as exc:
+            try:
+                await session.rollback()
+            except Exception:  # pragma: no cover - rollback should not raise
+                pass
+            log.warning("catalogue_stats.source_failed", source=source_key, error=str(exc))
+            stats.append(
+                {
+                    "source_key": source_key,
+                    "catalog_source": catalog_source,
+                    "card_count": 0,
+                    "last_success_at": None,
+                    "last_run_id": None,
+                }
+            )
     return {"catalog_stats": stats}

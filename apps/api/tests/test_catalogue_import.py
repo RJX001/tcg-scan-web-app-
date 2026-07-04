@@ -309,7 +309,7 @@ async def test_admin_sources_status_reclaims_stale_run(
     pokemon = next(row for row in body["catalog_stats"] if row["source_key"] == "pokemon")
     assert pokemon["current_run_status"] is None
     assert pokemon["import_status_message"] == (
-        "Previous import timed out or disconnected. You can retry safely."
+        "Previous import timed out or browser disconnected. Safe to retry."
     )
 
 
@@ -402,6 +402,97 @@ async def test_recover_stale_catalogue_imports_reclaims_all_sources(sqlite_sessi
     assert reclaimed >= 1
 
 
+@pytest.mark.asyncio
+async def test_status_returns_200_with_null_started_at(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    sqlite_session: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Simulate a run whose started_at cannot be read (null/garbage)."""
+    from datetime import datetime, timedelta
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            game="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            started_at=datetime.now() - timedelta(minutes=1),
+        )
+    )
+    await sqlite_session.commit()
+
+    # started_at unreadable → age None → treated as stale, never crashes.
+    monkeypatch.setattr(
+        "tcgscan_api.repositories.source_runs._run_age_seconds", lambda _v: None
+    )
+
+    r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert r.status_code == 200
+    assert "catalog_stats" in r.json()
+
+    run = await SourceRunsRepo(sqlite_session).last_failed("pokemon", run_type="full")
+    assert run is not None
+    assert run.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_status_returns_200_when_source_stats_query_fails(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A single source's run queries failing must not crash the whole payload."""
+
+    async def boom(self: SourceRunsRepo, source_key: str) -> None:
+        raise RuntimeError(f"active_run exploded for {source_key}")
+
+    monkeypatch.setattr(SourceRunsRepo, "active_run", boom)
+
+    r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
+    assert r.status_code == 200
+    body = r.json()
+    pokemon = next(row for row in body["catalog_stats"] if row["source_key"] == "pokemon")
+    assert pokemon["current_run_status"] == "failed"
+    assert pokemon["import_status_message"] == "Status temporarily unavailable for this source."
+
+
+@pytest.mark.asyncio
+async def test_cleanup_stale_endpoint_reclaims_run(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    sqlite_session: object,
+) -> None:
+    from datetime import datetime, timedelta
+
+    sqlite_session.add(
+        SourceRun(
+            source_key="pokemon",
+            game="pokemon",
+            run_type="full",
+            status=SourceRunStatus.running,
+            inserted_count=13750,
+            error_message=encode_batch_cursor(55, 250),
+            started_at=datetime.now() - timedelta(minutes=11),
+        )
+    )
+    await sqlite_session.commit()
+
+    r = await api_client.post("/v1/admin/sources/runs/cleanup-stale", headers=admin_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["reclaimed_count"] >= 1
+
+    run = await SourceRunsRepo(sqlite_session).last_failed("pokemon", run_type="full")
+    assert run is not None
+    assert run.status == SourceRunStatus.failed
+    assert run.finished_at is not None
+    assert STALE_RUN_ERROR_MESSAGE in (run.error_message or "")
+    assert "batch_cursor:page=55" in (run.error_message or "")
+
+
 def test_is_stale_handles_null_and_timezones() -> None:
     from datetime import datetime, timedelta, timezone
 
@@ -448,7 +539,7 @@ async def test_status_returns_200_with_stale_running_run(
     # Stale run reclaimed → no longer shown as running.
     assert pokemon["current_run_status"] is None
     assert pokemon["import_status_message"] == (
-        "Previous import timed out or disconnected. You can retry safely."
+        "Previous import timed out or browser disconnected. Safe to retry."
     )
 
     run = await SourceRunsRepo(sqlite_session).last_failed("pokemon", run_type="full")

@@ -680,38 +680,68 @@ async def start_full_catalogue_import(
         )
 
 
+async def _source_run_stats(
+    runs: SourceRunsRepo, row: dict[str, Any], source_key: str
+) -> dict[str, Any]:
+    active = await runs.active_run(source_key)
+    last_sample = await runs.last_success(source_key, run_type="sample")
+    last_full = await runs.last_success(source_key, run_type="full")
+    last_failed = await runs.last_failed(source_key, run_type="full")
+    import_status_message: str | None = None
+    if last_failed and last_failed.error_message and STALE_RUN_ERROR_MESSAGE in last_failed.error_message:
+        import_status_message = (
+            "Previous import timed out or browser disconnected. Safe to retry."
+        )
+    return {
+        **row,
+        "last_sample_at": (
+            last_sample.finished_at.isoformat()
+            if last_sample and last_sample.finished_at
+            else None
+        ),
+        "last_full_at": (
+            last_full.finished_at.isoformat() if last_full and last_full.finished_at else None
+        ),
+        "current_run_status": _public_status(active.status) if active else None,
+        "current_run_id": str(active.id) if active else None,
+        "import_status_message": import_status_message,
+    }
+
+
+def _failed_source_stats(row: dict[str, Any]) -> dict[str, Any]:
+    """Safe per-source row when this source's status queries failed."""
+    return {
+        **row,
+        "last_sample_at": row.get("last_sample_at"),
+        "last_full_at": row.get("last_full_at"),
+        "current_run_status": "failed",
+        "current_run_id": None,
+        "import_status_message": "Status temporarily unavailable for this source.",
+    }
+
+
 async def catalogue_stats(session: AsyncSession) -> dict[str, Any]:
-    """Extended stats for admin sources UI."""
+    """Extended stats for admin sources UI.
+
+    Per-source failures are isolated: a source whose run queries fail is
+    returned as failed instead of crashing the whole status payload.
+    """
     from tcgscan_api.services.catalogue_ingest import catalogue_stats as base_stats
 
     base = await base_stats(session)
     runs = SourceRunsRepo(session)
     stats: list[dict[str, Any]] = []
     for row in base.get("catalog_stats", []):
-        source_key = str(row["source_key"])
-        active = await runs.active_run(source_key)
-        last_sample = await runs.last_success(source_key, run_type="sample")
-        last_full = await runs.last_success(source_key, run_type="full")
-        last_failed = await runs.last_failed(source_key, run_type="full")
-        import_status_message: str | None = None
-        if last_failed and last_failed.error_message and STALE_RUN_ERROR_MESSAGE in last_failed.error_message:
-            import_status_message = (
-                "Previous import timed out or disconnected. You can retry safely."
+        source_key = str(row.get("source_key", ""))
+        try:
+            stats.append(await _source_run_stats(runs, row, source_key))
+        except Exception as exc:
+            try:
+                await session.rollback()
+            except Exception:  # pragma: no cover - rollback should not raise
+                pass
+            log.warning(
+                "catalogue_import.source_stats_failed", source=source_key, error=str(exc)
             )
-        stats.append(
-            {
-                **row,
-                "last_sample_at": (
-                    last_sample.finished_at.isoformat()
-                    if last_sample and last_sample.finished_at
-                    else None
-                ),
-                "last_full_at": (
-                    last_full.finished_at.isoformat() if last_full and last_full.finished_at else None
-                ),
-                "current_run_status": _public_status(active.status) if active else None,
-                "current_run_id": str(active.id) if active else None,
-                "import_status_message": import_status_message,
-            }
-        )
+            stats.append(_failed_source_stats(row))
     return {"catalog_stats": stats}
