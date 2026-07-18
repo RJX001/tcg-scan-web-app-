@@ -28,8 +28,8 @@ Cross-check against Phase 1 §9 KPIs before opening the 25-user closed beta.
 
 ## Ops
 
-- [ ] Sentry on web, api, worker, ml
-- [ ] OpenTelemetry → Grafana Cloud
+- [ ] ~~Sentry on web, api, worker, ml~~ — removed in favour of OTEL-only (ADR-0001); error triage via Tempo span errors + Loki + alert on `tcgscan.scan.count{outcome="error"}`
+- [ ] OpenTelemetry → Grafana Cloud (api: traces + metrics + logs via Alloy; worker/web/ml pending)
 - [ ] LangSmith project for agent traces
 - [ ] Stripe Pro tier + free scan limits enforced
 - [x] Code: tier gates + Stripe scaffold shipped (configure keys for prod)

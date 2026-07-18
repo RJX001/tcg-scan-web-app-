@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from tcgscan_api.config import get_settings
 from tcgscan_api.cors import cors_origins_from_settings, wrap_with_cors
 from tcgscan_api.errors import AppError
+from tcgscan_api.logging_setup import configure_logging
 from tcgscan_api.middleware.auth import AuthMiddleware
 from tcgscan_api.routes import (
     admin,
@@ -24,6 +25,8 @@ from tcgscan_api.routes import (
 )
 from tcgscan_api.telemetry import init_observability
 
+# JSON stdout + stdlib bridge before the FastAPI app / OTEL bootstrap.
+configure_logging()
 
 log = structlog.get_logger()
 
@@ -91,7 +94,7 @@ fastapi_app.include_router(searches.router, prefix="/v1")
 fastapi_app.include_router(watchlist.router, prefix="/v1")
 fastapi_app.include_router(admin.router, prefix="/v1")
 
-# OTEL/Sentry after routes exist so FastAPI auto-instrumentation sees them.
+# OTEL after routes exist so FastAPI auto-instrumentation sees them.
 init_observability(fastapi_app)
 
 # Outermost ASGI wrapper — uvicorn imports `app`.

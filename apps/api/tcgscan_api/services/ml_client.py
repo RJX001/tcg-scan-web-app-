@@ -11,10 +11,19 @@ from typing import Any
 
 import httpx
 import structlog
+from opentelemetry import metrics, trace
 
 from tcgscan_api.config import get_settings
 
 log = structlog.get_logger()
+
+tracer = trace.get_tracer("tcgscan_api.ml")
+meter = metrics.get_meter("tcgscan_api.ml")
+
+ML_REQUESTS = meter.create_counter(
+    "tcgscan.ml.requests",
+    description="ML endpoint calls by mode",
+)
 
 
 def _stub_vector(image_b64: str, dim: int) -> list[float]:
@@ -45,27 +54,77 @@ class MLClient:
             return None
 
     async def detect(self, image_b64: str) -> dict[str, Any]:
-        out = await self._call(self._settings.modal_detect_url, {"image_b64": image_b64})
-        return out or {"bboxes": [{"x": 0, "y": 0, "w": 1.0, "h": 1.0, "angle": 0.0}]}
+        url = self._settings.modal_detect_url
+        with tracer.start_as_current_span("ml.detect") as span:
+            span.set_attribute("tcgscan.ml.endpoint", "detect")
+            if not url:
+                span.set_attribute("tcgscan.ml.mode", "stub")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "detect", "tcgscan.ml.mode": "stub"})
+                return {"bboxes": [{"x": 0, "y": 0, "w": 1.0, "h": 1.0, "angle": 0.0}]}
+            out = await self._call(url, {"image_b64": image_b64})
+            if out:
+                span.set_attribute("tcgscan.ml.mode", "live")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "detect", "tcgscan.ml.mode": "live"})
+                return out
+            span.set_attribute("tcgscan.ml.mode", "fallback")
+            ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "detect", "tcgscan.ml.mode": "fallback"})
+            return {"bboxes": [{"x": 0, "y": 0, "w": 1.0, "h": 1.0, "angle": 0.0}]}
 
     async def embed(self, image_b64: str) -> list[float]:
-        out = await self._call(self._settings.modal_embed_url, {"image_b64": image_b64})
-        if (
-            out
-            and isinstance(out.get("vector"), list)
-            and len(out["vector"]) == self._settings.embedding_dim
-        ):
-            return [float(x) for x in out["vector"]]
-        return _stub_vector(image_b64, self._settings.embedding_dim)
+        url = self._settings.modal_embed_url
+        with tracer.start_as_current_span("ml.embed") as span:
+            span.set_attribute("tcgscan.ml.endpoint", "embed")
+            if not url:
+                span.set_attribute("tcgscan.ml.mode", "stub")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "embed", "tcgscan.ml.mode": "stub"})
+                return _stub_vector(image_b64, self._settings.embedding_dim)
+            out = await self._call(url, {"image_b64": image_b64})
+            if (
+                out
+                and isinstance(out.get("vector"), list)
+                and len(out["vector"]) == self._settings.embedding_dim
+            ):
+                span.set_attribute("tcgscan.ml.mode", "live")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "embed", "tcgscan.ml.mode": "live"})
+                return [float(x) for x in out["vector"]]
+            span.set_attribute("tcgscan.ml.mode", "fallback")
+            ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "embed", "tcgscan.ml.mode": "fallback"})
+            return _stub_vector(image_b64, self._settings.embedding_dim)
 
     async def ocr(self, image_b64: str) -> dict[str, Any]:
-        out = await self._call(self._settings.modal_ocr_url, {"image_b64": image_b64})
-        return out or {"text": "", "fields": {}}
+        url = self._settings.modal_ocr_url
+        with tracer.start_as_current_span("ml.ocr") as span:
+            span.set_attribute("tcgscan.ml.endpoint", "ocr")
+            if not url:
+                span.set_attribute("tcgscan.ml.mode", "stub")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "ocr", "tcgscan.ml.mode": "stub"})
+                return {"text": "", "fields": {}}
+            out = await self._call(url, {"image_b64": image_b64})
+            if out:
+                span.set_attribute("tcgscan.ml.mode", "live")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "ocr", "tcgscan.ml.mode": "live"})
+                return out
+            span.set_attribute("tcgscan.ml.mode", "fallback")
+            ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "ocr", "tcgscan.ml.mode": "fallback"})
+            return {"text": "", "fields": {}}
 
     async def grade(self, image_b64: str) -> dict[str, Any]:
-        out = await self._call(self._settings.modal_grade_url, {"image_b64": image_b64})
-        if out and out.get("overall") is not None:
-            return out
-        from tcgscan_ml.grade.heuristic import grade_image_b64
+        url = self._settings.modal_grade_url
+        with tracer.start_as_current_span("ml.grade") as span:
+            span.set_attribute("tcgscan.ml.endpoint", "grade")
+            if not url:
+                span.set_attribute("tcgscan.ml.mode", "stub")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "grade", "tcgscan.ml.mode": "stub"})
+                from tcgscan_ml.grade.heuristic import grade_image_b64
 
-        return grade_image_b64(image_b64)
+                return grade_image_b64(image_b64)
+            out = await self._call(url, {"image_b64": image_b64})
+            if out and out.get("overall") is not None:
+                span.set_attribute("tcgscan.ml.mode", "live")
+                ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "grade", "tcgscan.ml.mode": "live"})
+                return out
+            span.set_attribute("tcgscan.ml.mode", "fallback")
+            ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "grade", "tcgscan.ml.mode": "fallback"})
+            from tcgscan_ml.grade.heuristic import grade_image_b64
+
+            return grade_image_b64(image_b64)

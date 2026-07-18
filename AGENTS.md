@@ -59,7 +59,7 @@ tcg-scan/
 | Auth | **Supabase Auth** (JWT). Clerk removed. |
 | Payments | Stripe |
 | Agents | LangGraph graphs (heuristics today; Claude when `ANTHROPIC_API_KEY` wired) |
-| Observability | OpenTelemetry → Grafana Cloud, LangSmith, Sentry (hooks; keys pending) |
+| Observability | OpenTelemetry only (traces + metrics + logs via Alloy/OTLP → Grafana Cloud today; backend swappable), LangSmith (keys pending). Sentry removed — ADR-0001 |
 | Product brand | UI ships as **TCG Chart**; docs/package name **TCG Scan** |
 
 ---
@@ -323,8 +323,7 @@ The full list lives in `.env.example`. Highlights every agent must respect:
 | `APIFY_TOKEN` | worker | Cardmarket dataset |
 | `DEV_AUTH_ENABLED` | api, web SDK | Local bypass via `X-Dev-User-Id` |
 | `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | agents | Observability |
-| `SENTRY_DSN_<APP>` | all | One per app |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | all | Grafana Cloud |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | all | Alloy OTLP HTTP base (traces + metrics + logs); Sentry removed — ADR-0001 |
 
 ---
 

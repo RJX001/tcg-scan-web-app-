@@ -4,6 +4,12 @@
 
 ### Added
 
+- API observability, fully OTEL-native: custom scan-pipeline spans (`scan.run` + detect/embed_ocr_grade/ann_search/rerank/verdict stages) and ML client spans with stub/fallback/live mode, business metrics (`tcgscan.scan.duration`, `tcgscan.scan.stage.duration`, `tcgscan.scan.count`, `tcgscan.ml.requests`), SQLAlchemy + Redis auto-instrumentation, OTLP log export with structlog JSON output + trace correlation, and standard `OTEL_TRACES_SAMPLER` env-var support
+
+### Removed
+
+- Sentry (`sentry-sdk`, init code, `SENTRY_DSN_API`): never loaded in production (dev-only dep vs `--no-dev` image) and superseded by the OTEL-only pipeline — see `docs/adr/0001-otel-only-observability.md`
+
 - Monorepo bootstrap (Turborepo, apps, packages, infra)
 - Weeks 1–5: catalog ingest (Pokemon, MTG, YGO, Lorcana, One Piece, Sports), Qdrant embed pipeline, eBay/TCGPlayer/Cardmarket pricing ingest, FX normalization, Temporal workflows + schedules, `docs/data-sources.md`
 - Weeks 6–12: scan pipeline, search + card detail + scan UX, portfolio/alerts/billing, LangGraph agent wiring (GradeROI, Monitor, Digest), portfolio CSV export, image search, eval hooks, `pnpm db:demo`

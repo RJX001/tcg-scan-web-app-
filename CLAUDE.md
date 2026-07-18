@@ -20,7 +20,7 @@ Monorepo: `pnpm` + Turborepo + `uv`.
 | `packages/ui` | Shared React components |
 | `packages/agents` | LangGraph graphs |
 
-**Data:** Postgres 16 + pgvector (app OLTP — local Docker / Railway). **Auth:** Supabase Auth (JWT only; not the app DB). Qdrant (image embeddings). Redis (cache / rate limits). **Payments:** Stripe. **Agents:** LangGraph (+ Claude when wired).
+**Data:** Postgres 16 + pgvector (app OLTP — local Docker / Railway). **Auth:** Supabase Auth (JWT only; not the app DB). Qdrant (image embeddings). Redis (cache / rate limits). **Payments:** Stripe. **Agents:** LangGraph (+ Claude when wired). **Observability:** OpenTelemetry only via Alloy/OTLP (Sentry removed — `docs/adr/0001-otel-only-observability.md`).
 
 **One rule:** `apps/web` never calls eBay, TCGPlayer, Cardmarket, or other marketplaces. External data → worker (or admin ingest on the API) → Postgres. Web → our API only (`NEXT_PUBLIC_API_URL`).
 
