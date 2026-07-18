@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
 import { Hanken_Grotesk, IBM_Plex_Mono, Spectral } from "next/font/google";
 import type { CSSProperties } from "react";
-import { IndexesClient } from "./indexes-client";
+import { InsightsClient } from "./insights-client";
 
 const display = Spectral({ subsets: ["latin"], weight: ["700", "800"] });
 const body = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "600", "700"] });
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
-  title: "Indexes — CardChart",
+  title: "Insights — CardChart",
   description:
-    "The market at a glance — last sold prices, monthly movement and sales volume across every card we track.",
+    "Your morning market summary — portfolio movers, trending cards and opportunities.",
 };
 
-export default function IndexesPage() {
+export default function InsightsPage() {
   const theme = {
     background: "#F7F6F2",
     minHeight: "100%",
@@ -23,7 +23,7 @@ export default function IndexesPage() {
 
   return (
     <main className={`${body.className} mx-auto max-w-[1200px] px-6 py-10`} style={theme}>
-      <IndexesClient />
+      <InsightsClient />
     </main>
   );
 }

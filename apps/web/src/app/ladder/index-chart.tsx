@@ -40,18 +40,36 @@ export function IndexChart({ game }: { game: string }) {
   }));
   const change = index.change_pct ?? 0;
   const up = change >= 0;
+  const stroke = up ? "#1E9A6B" : "#D6444B";
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4">
+    <div
+      className="rounded-[11px] border p-4 shadow-[0_1px_2px_rgba(23,24,28,0.05)]"
+      style={{
+        background: "#FFFFFF",
+        borderColor: "#E4E1D8",
+        fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
+      }}
+    >
       <div className="flex items-baseline justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Composite index · 90d</p>
-          <p className="font-semibold">{index.name}</p>
+          <p
+            className="text-[11px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: "#84878F" }}
+          >
+            Composite index · 90d
+          </p>
+          <p className="font-semibold" style={{ color: "#17181C" }}>
+            {index.name}
+          </p>
         </div>
         <span
-          className={`rounded px-1.5 py-0.5 text-sm font-semibold ${
-            up ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-          }`}
+          className="rounded-md px-1.5 py-0.5 text-sm font-semibold tabular-nums"
+          style={{
+            background: up ? "rgba(30,154,107,0.13)" : "rgba(214,68,75,0.13)",
+            color: stroke,
+            fontFamily: "'IBM Plex Mono', monospace",
+          }}
         >
           {up ? "+" : ""}
           {change.toFixed(2)}%
@@ -60,15 +78,30 @@ export function IndexChart({ game }: { game: string }) {
       <div className="mt-3 h-40 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E4E1D8" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: "#84878F" }}
+              interval="preserveStartEnd"
+              axisLine={{ stroke: "#E4E1D8" }}
+              tickLine={false}
+            />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: "#84878F" }}
               domain={["auto", "auto"]}
               tickFormatter={(v: number) => v.toFixed(0)}
               width={44}
+              axisLine={false}
+              tickLine={false}
             />
             <Tooltip
+              contentStyle={{
+                background: "#1E2128",
+                border: "1px solid #2A2E37",
+                borderRadius: 8,
+                color: "#F6F7F9",
+                fontSize: 12,
+              }}
               formatter={(value: number, _name, item) => [
                 `${value.toFixed(2)} (${(item?.payload as { constituents?: number })?.constituents ?? "?"} cards)`,
                 "Index",
@@ -77,14 +110,14 @@ export function IndexChart({ game }: { game: string }) {
             <Line
               type="monotone"
               dataKey="index_value"
-              stroke={up ? "#16a34a" : "#dc2626"}
+              stroke={stroke}
               strokeWidth={2}
               dot={false}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="mt-2 text-xs text-zinc-400">
+      <p className="mt-2 text-xs" style={{ color: "#84878F" }}>
         Equal-weighted, rebased to 100 at window start, like the CL50 — based on daily median
         sale prices.
       </p>

@@ -3,7 +3,6 @@ import { CompsTable } from "@/components/comps-table";
 import { ListingsTable } from "@/components/listings-table";
 import { MarketplacePrices } from "@/components/marketplace-prices";
 import { PriceChart } from "@/components/price-chart";
-import { Card, CardContent, CardHeader, CardTitle } from "@tcgscan/ui";
 import type {
   CardOut,
   CompOut,
@@ -31,20 +30,66 @@ export const revalidate = 900;
 
 type Props = { params: Promise<{ slug: string }> };
 
+/** Daylight tokens — scoped to this page only (no globals.css edits). */
+const PAGE = {
+  bg: "#F7F6F2",
+  text: "#17181C",
+  text2: "#5B5F68",
+  text3: "#84878F",
+  accent: "#B6862E",
+  accentSoft: "rgba(182,134,46,0.10)",
+  surface: "#FFFFFF",
+  border: "#E4E1D8",
+  up: "#1E9A6B",
+  down: "#D6444B",
+  panel: "#1E2128",
+  panel2: "#252932",
+  panelBorder: "#2A2E37",
+  panelText: "#F6F7F9",
+  panelText2: "#BAC0CB",
+  panelText3: "#8C93A1",
+  panelGold: "#E0B94A",
+  panelUp: "#34D499",
+} as const;
+
 function cardImage(card: CardOut): string | null {
+  if (typeof card.image_url === "string" && card.image_url) return card.image_url;
   const urls = card.image_urls;
   if (!urls) return null;
-  const front = urls.front ?? urls.small ?? urls.hires;
+  const front = urls.front ?? urls.small ?? urls.hires ?? urls.large;
   return typeof front === "string" ? front : null;
 }
 
-function PriceTile({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-3">
-      <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
-    </div>
-  );
+function metaValue(
+  meta: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): string | null {
+  if (!meta) return null;
+  for (const key of keys) {
+    const v = meta[key];
+    if (v == null || v === "") continue;
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" || typeof v === "boolean") return String(v);
+    if (Array.isArray(v) && v.length > 0) {
+      return v
+        .map((item) => (typeof item === "string" || typeof item === "number" ? String(item) : null))
+        .filter(Boolean)
+        .join(", ");
+    }
+  }
+  return null;
+}
+
+/** Pull curated catalogue fields — never dump the raw metadata object. */
+function catalogueFields(card: CardOut) {
+  const meta = card.metadata ?? undefined;
+  return {
+    type: metaValue(meta, "type_line", "card_type", "supertype", "types", "type"),
+    colour: metaValue(meta, "colour", "color", "colors", "color_identity"),
+    cost: metaValue(meta, "mana_cost", "cost", "cmc"),
+    power: metaValue(meta, "power", "hp", "atk"),
+    effect: metaValue(meta, "oracle_text", "effect", "description", "card_text", "desc"),
+  };
 }
 
 function popReportUrl(card: CardOut): string {
@@ -52,17 +97,128 @@ function popReportUrl(card: CardOut): string {
   return `https://www.psacard.com/pop/search?q=${q}`;
 }
 
-function VerdictBadge({ verdict }: { verdict: GradeVerdict }) {
-  const colors: Record<string, string> = {
-    GRADE: "bg-green-100 text-green-800",
-    SELL: "bg-red-100 text-red-800",
-    HOLD: "bg-zinc-100 text-zinc-800",
-    BUY: "bg-blue-100 text-blue-800",
-  };
+function formatSoldAgo(iso: string | undefined): string {
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "—";
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function AiVerdict({ verdict }: { verdict: GradeVerdict }) {
+  const tone =
+    verdict.action === "BUY" || verdict.action === "GRADE"
+      ? { color: PAGE.panelUp, arrow: "▲" }
+      : verdict.action === "SELL"
+        ? { color: "#FF6B70", arrow: "▼" }
+        : { color: PAGE.panelGold, arrow: "●" };
+
+  const bullets = [
+    verdict.reason,
+    verdict.raw_median_usd != null ? (
+      <>
+        Raw median ≈ <Money usd={verdict.raw_median_usd} />
+      </>
+    ) : null,
+    verdict.graded_estimate_usd != null ? (
+      <>
+        Graded estimate ≈ <Money usd={verdict.graded_estimate_usd} />
+      </>
+    ) : null,
+    verdict.expected_profit_usd != null ? (
+      <>
+        Expected profit ≈ <Money usd={verdict.expected_profit_usd} />
+      </>
+    ) : null,
+  ].filter(Boolean);
+
   return (
-    <div className={`rounded-lg p-4 ${colors[verdict.action] ?? colors.HOLD}`}>
-      <p className="font-semibold">{verdict.action}</p>
-      <p className="mt-1 text-sm">{verdict.reason}</p>
+    <div
+      className="rounded-[18px] p-[1.5px]"
+      style={{
+        background: `linear-gradient(135deg, ${PAGE.panelUp}, ${PAGE.panelGold})`,
+      }}
+    >
+      <div
+        className="rounded-[16.5px] p-6"
+        style={{ background: PAGE.panel, color: PAGE.panelText }}
+      >
+        <div
+          className="text-[11px] font-bold uppercase tracking-[0.14em]"
+          style={{ color: PAGE.panelGold }}
+        >
+          ★ AI Verdict
+        </div>
+        <div className="mt-3.5 flex flex-wrap items-center gap-4">
+          <span
+            className="inline-flex items-center gap-2 rounded-[14px] border px-5 py-2.5 text-[22px] font-extrabold"
+            style={{
+              borderColor: PAGE.panelBorder,
+              background: "rgba(255,255,255,0.06)",
+              color: tone.color,
+            }}
+          >
+            {tone.arrow} {verdict.action}
+          </span>
+        </div>
+        {bullets.length > 0 ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {bullets.map((b, i) => (
+              <div
+                key={i}
+                className="flex gap-2.5 rounded-xl border px-3.5 py-3 text-[13.5px] leading-snug"
+                style={{
+                  background: PAGE.panel2,
+                  borderColor: PAGE.panelBorder,
+                  color: PAGE.panelText,
+                }}
+              >
+                <span aria-hidden>▸</span>
+                <span>{b}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div
+          className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t pt-4"
+          style={{ borderColor: PAGE.panelBorder }}
+        >
+          <div className="flex gap-6">
+            {verdict.graded_estimate_usd != null ? (
+              <div>
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.08em]"
+                  style={{ color: PAGE.panelText3 }}
+                >
+                  Graded target
+                </div>
+                <div className="mt-0.5 text-lg font-extrabold tabular-nums">
+                  <Money usd={verdict.graded_estimate_usd} />
+                </div>
+              </div>
+            ) : null}
+            {verdict.grading_cost_usd != null ? (
+              <div>
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.08em]"
+                  style={{ color: PAGE.panelText3 }}
+                >
+                  Grading cost
+                </div>
+                <div className="mt-0.5 text-lg font-extrabold tabular-nums">
+                  <Money usd={verdict.grading_cost_usd} />
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <p className="max-w-[300px] text-[11px]" style={{ color: PAGE.panelText3 }}>
+            CardChart&apos;s verdict is informational only and not financial advice.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -102,155 +258,414 @@ export default async function CardDetailPage({ params }: Props) {
   }
 
   const img = cardImage(card);
+  const fields = catalogueFields(card);
+  const number = card.number ?? card.card_number;
+  const setLabel = card.set_name ?? card.set_code ?? null;
+  const hasPricing = card.price_status === "available" && summary.count >= 5;
+  const displayPrice = hasPricing
+    ? summary.median_usd
+    : (card.current_value ?? summary.median_usd ?? null);
+  const lastSold = comps[0]?.sold_at;
+  const chipBits = [card.rarity, number ? `#${number}` : null].filter(Boolean);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <Link href="/scan" className="text-sm text-zinc-500 hover:text-zinc-900">
-        ← Scanner
-      </Link>
+    <main className="min-h-screen" style={{ background: PAGE.bg, color: PAGE.text }}>
+      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 sm:py-10">
+        <Link
+          href="/search"
+          className="text-sm font-medium hover:underline"
+          style={{ color: PAGE.text3 }}
+        >
+          ← Search cards
+        </Link>
 
-      <div className="mt-6 grid gap-8 md:grid-cols-[240px_1fr]">
-        <div className="relative aspect-[3/4] w-full max-w-[240px] overflow-hidden rounded-xl border bg-zinc-50">
-          {img ? (
-            <Image src={img} alt={card.name} fill className="object-contain p-2" sizes="240px" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-zinc-400">No image</div>
-          )}
-        </div>
+        <div className="mt-6 grid items-start gap-7 lg:grid-cols-[300px_1fr]">
+          {/* Sticky left dark panel */}
+          <aside
+            className="rounded-[18px] border p-[18px] shadow-[0_30px_70px_-24px_rgba(20,18,10,0.22)] lg:sticky lg:top-24"
+            style={{
+              background: PAGE.panel,
+              borderColor: PAGE.panelBorder,
+              color: PAGE.panelText,
+            }}
+          >
+            <div
+              className="relative aspect-[5/7] overflow-hidden rounded-xl border"
+              style={{
+                borderColor: PAGE.panelBorder,
+                background: `repeating-linear-gradient(135deg, ${PAGE.panel2}, ${PAGE.panel2} 9px, ${PAGE.panel} 9px, ${PAGE.panel} 18px)`,
+              }}
+            >
+              {img ? (
+                <Image
+                  src={img}
+                  alt={card.name}
+                  fill
+                  className="object-contain p-2"
+                  sizes="300px"
+                  priority
+                />
+              ) : (
+                <div
+                  className="flex h-full items-center justify-center text-xs font-bold tracking-[0.2em]"
+                  style={{ color: PAGE.panelText3 }}
+                >
+                  CARD ART
+                </div>
+              )}
+            </div>
 
-        <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-zinc-500">{card.game}</p>
-          <h1 className="mt-1 text-3xl font-bold">{card.name}</h1>
-          <p className="mt-2 text-zinc-600">
-            {card.set_name ?? card.set_code} · {card.number} · {card.rarity}
-          </p>
+            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12.5px]" style={{ color: PAGE.panelText3 }}>
+                {chipBits.length > 0 ? (
+                  <>
+                    {chipBits.join(" · ")}
+                    {card.rarity?.toLowerCase().includes("secret") ||
+                    card.rarity?.toLowerCase().includes("illustration") ? (
+                      <span className="ml-1 font-bold" style={{ color: PAGE.panelGold }}>
+                        ★ Grail
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  "Catalogue"
+                )}
+              </span>
+              <span className="text-base font-extrabold tabular-nums">
+                {displayPrice != null ? <Money usd={displayPrice} /> : "—"}
+              </span>
+            </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {card.price_status === "available" && summary.count >= 5 ? (
-              <>
-                <PriceTile label="30d median" value={<Money usd={summary.median_usd} />} />
-                <PriceTile label="30d mean" value={<Money usd={summary.mean_usd} />} />
-                <PriceTile label="30d low" value={<Money usd={summary.min_usd} />} />
-                <PriceTile label="30d high" value={<Money usd={summary.max_usd} />} />
-              </>
-            ) : (
-              <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:col-span-4">
-                <p className="text-sm font-medium text-amber-900">Live pricing unavailable</p>
-                <p className="mt-1 text-sm text-amber-800">
-                  Live pricing unavailable until marketplace/sold comp sources are connected.
-                  Catalogue metadata is shown below.
-                </p>
+            <div
+              className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border"
+              style={{ background: PAGE.panelBorder, borderColor: PAGE.panelBorder }}
+            >
+              {(
+                [
+                  ["Game", card.game],
+                  ["Set", setLabel ?? "—"],
+                  ["Number", number ?? "—"],
+                  ["Rarity", card.rarity ?? "—"],
+                  [
+                    "30d sales",
+                    hasPricing ? <Num n={summary.count} /> : "Pending",
+                  ],
+                  [
+                    "Listings",
+                    listings.length > 0 ? <Num n={listings.length} /> : "—",
+                  ],
+                ] as const
+              ).map(([k, v]) => (
+                <div key={k} className="px-3 py-2.5" style={{ background: PAGE.panel }}>
+                  <div
+                    className="text-[10px] font-bold uppercase tracking-[0.06em]"
+                    style={{ color: PAGE.panelText3 }}
+                  >
+                    {k}
+                  </div>
+                  <div className="mt-0.5 truncate text-sm font-bold" title={typeof v === "string" ? v : undefined}>
+                    {v}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {(fields.type || fields.colour || fields.cost || fields.power) && (
+              <div className="mt-3 space-y-1.5 text-[12.5px]" style={{ color: PAGE.panelText2 }}>
+                {fields.type ? (
+                  <p>
+                    <span style={{ color: PAGE.panelText3 }}>Type </span>
+                    {fields.type}
+                  </p>
+                ) : null}
+                {fields.colour ? (
+                  <p>
+                    <span style={{ color: PAGE.panelText3 }}>Colour </span>
+                    {fields.colour}
+                  </p>
+                ) : null}
+                {fields.cost ? (
+                  <p>
+                    <span style={{ color: PAGE.panelText3 }}>Cost </span>
+                    {fields.cost}
+                  </p>
+                ) : null}
+                {fields.power ? (
+                  <p>
+                    <span style={{ color: PAGE.panelText3 }}>Power </span>
+                    {fields.power}
+                  </p>
+                ) : null}
               </div>
             )}
-          </div>
 
-          <div className="mt-4">
-            <MarketplacePrices cardId={card.id} initial={sources} />
-          </div>
-
-          <p className="mt-4 text-sm text-zinc-500">{summary.count} sold comps in the last 30 days</p>
-
-          {population && population.total > 0 ? (
-            <div className="mt-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">
-                Graded population · <Num n={population.total} /> total
+            {card.source ? (
+              <p className="mt-3 text-[11px]" style={{ color: PAGE.panelText3 }}>
+                Source · {card.source}
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
+            ) : null}
+
+            {!hasPricing || card.price_status === "pending" ? (
+              <p
+                className="mt-3 rounded-lg border px-3 py-2 text-[12px] leading-snug"
+                style={{
+                  borderColor: PAGE.panelBorder,
+                  background: PAGE.panel2,
+                  color: PAGE.panelGold,
+                }}
+              >
+                Price pending — live pricing unavailable until marketplace comps connect.
+              </p>
+            ) : null}
+          </aside>
+
+          {/* Main column */}
+          <div className="flex flex-col gap-[18px]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: PAGE.accent }}
+                >
+                  {[card.game, setLabel].filter(Boolean).join(" · ")}
+                </div>
+                <h1 className="mt-1 text-[clamp(28px,4vw,32px)] font-extrabold tracking-[-0.02em]">
+                  {card.name}
+                </h1>
+                <p className="mt-1 text-[13.5px]" style={{ color: PAGE.text2 }}>
+                  {[card.rarity, number ? `#${number}` : null].filter(Boolean).join(" · ") ||
+                    "Catalogue card"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {card.rarity ? (
+                    <span
+                      className="whitespace-nowrap rounded-[9px] border px-3.5 py-1.5 text-[12.5px] font-semibold"
+                      style={{
+                        borderColor: PAGE.border,
+                        background: PAGE.surface,
+                        color: PAGE.text,
+                      }}
+                    >
+                      {card.rarity}
+                    </span>
+                  ) : null}
+                  {fields.type ? (
+                    <span
+                      className="whitespace-nowrap rounded-[9px] border px-3.5 py-1.5 text-[12.5px] font-semibold"
+                      style={{
+                        borderColor: PAGE.accent,
+                        background: PAGE.accentSoft,
+                        color: PAGE.accent,
+                      }}
+                    >
+                      {fields.type}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="text-right sm:mr-[40px] lg:mr-[60px]">
+                <div className="text-[30px] font-extrabold tabular-nums leading-none">
+                  {displayPrice != null ? <Money usd={displayPrice} /> : "—"}
+                </div>
+                <div
+                  className="mt-1 text-[13px] font-bold"
+                  style={{ color: hasPricing ? PAGE.up : PAGE.text3 }}
+                >
+                  {hasPricing ? (
+                    <>
+                      30d median · <Num n={summary.count} /> sales
+                    </>
+                  ) : (
+                    "Price pending"
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+              <div>
+                <div className="text-xs" style={{ color: PAGE.text3 }}>
+                  Last Sold Price
+                </div>
+                <div className="mt-0.5 text-base font-bold tabular-nums">
+                  {comps[0] ? (
+                    new Intl.NumberFormat(undefined, {
+                      style: "currency",
+                      currency: comps[0].currency,
+                    }).format(comps[0].price)
+                  ) : displayPrice != null ? (
+                    <Money usd={displayPrice} />
+                  ) : (
+                    "—"
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: PAGE.text3 }}>
+                  Last Sold Date
+                </div>
+                <div className="mt-0.5 text-base font-bold tabular-nums">
+                  {formatSoldAgo(lastSold)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: PAGE.text3 }}>
+                  Pop
+                </div>
+                <div className="mt-0.5 text-base font-bold tabular-nums">
+                  {population && population.total > 0 ? <Num n={population.total} /> : "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: PAGE.text3 }}>
+                  30d range
+                </div>
+                <div className="mt-0.5 text-base font-bold tabular-nums">
+                  {hasPricing ? (
+                    <>
+                      <Money usd={summary.min_usd} /> – <Money usd={summary.max_usd} />
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {fields.effect ? (
+              <div
+                className="rounded-[18px] border px-4 py-3.5 text-sm leading-relaxed shadow-[0_1px_2px_rgba(23,24,28,0.05)]"
+                style={{
+                  background: PAGE.surface,
+                  borderColor: PAGE.border,
+                  color: PAGE.text2,
+                }}
+              >
+                <div
+                  className="text-[11px] font-bold uppercase tracking-[0.1em]"
+                  style={{ color: PAGE.accent }}
+                >
+                  Effect
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap">{fields.effect}</p>
+              </div>
+            ) : null}
+
+            <div
+              className="rounded-[18px] border p-[18px] shadow-[0_1px_2px_rgba(23,24,28,0.05)]"
+              style={{ background: PAGE.surface, borderColor: PAGE.border }}
+            >
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <div className="text-[15px] font-bold">Price history</div>
+                <span className="text-xs" style={{ color: PAGE.text3 }}>
+                  Last 90 days
+                </span>
+              </div>
+              <PriceChart data={chart} accent={PAGE.accent} />
+            </div>
+
+            <div
+              className="rounded-[18px] border p-[18px] shadow-[0_1px_2px_rgba(23,24,28,0.05)]"
+              style={{
+                background: PAGE.surface,
+                borderColor: PAGE.border,
+              }}
+            >
+              <MarketplacePrices cardId={card.id} initial={sources} tone="daylight" />
+            </div>
+
+            {population && population.total > 0 ? (
+              <div className="flex flex-wrap gap-2">
                 {population.entries.map((e) => (
                   <span
                     key={`${e.grade_company}-${e.grade}`}
-                    className="rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700"
+                    className="whitespace-nowrap rounded-md border px-2 py-1 text-xs"
+                    style={{
+                      borderColor: PAGE.border,
+                      background: PAGE.surface,
+                      color: PAGE.text2,
+                    }}
                   >
                     {e.grade_company} {e.grade}:{" "}
-                    <span className="font-semibold">
+                    <span className="font-semibold" style={{ color: PAGE.text }}>
                       <Num n={e.pop_count} />
                     </span>
                   </span>
                 ))}
+                <a
+                  href={popReportUrl(card)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold hover:underline"
+                  style={{ color: PAGE.accent }}
+                >
+                  PSA pop report →
+                </a>
               </div>
+            ) : (
+              <a
+                href={popReportUrl(card)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold hover:underline"
+                style={{ color: PAGE.accent }}
+              >
+                PSA pop report →
+              </a>
+            )}
+
+            <div>
+              <CardActions
+                cardId={card.id}
+                cardName={card.name}
+                medianUsd={summary.median_usd}
+              />
             </div>
-          ) : null}
 
-          <p className="mt-2 text-sm">
-            <a
-              href={popReportUrl(card)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
+            <div
+              className="rounded-[18px] border p-[18px] shadow-[0_1px_2px_rgba(23,24,28,0.05)]"
+              style={{
+                background: PAGE.panel,
+                borderColor: PAGE.panelBorder,
+                color: PAGE.panelText,
+              }}
             >
-              PSA pop report →
-            </a>
-          </p>
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <div className="text-[15px] font-bold">Recent sold prices</div>
+                <span className="text-xs" style={{ color: PAGE.panelText3 }}>
+                  Last 90 days · {comps.length} sales
+                </span>
+              </div>
+              <CompsTable comps={comps} tone="panel" />
+            </div>
 
-          <div className="mt-6">
-            <CardActions cardId={card.id} cardName={card.name} medianUsd={summary.median_usd} />
+            <div
+              className="rounded-[18px] border p-[18px] shadow-[0_1px_2px_rgba(23,24,28,0.05)]"
+              style={{
+                background: PAGE.panel,
+                borderColor: PAGE.panelBorder,
+                color: PAGE.panelText,
+              }}
+            >
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <div className="text-[15px] font-bold">Active listings</div>
+                <span className="text-xs" style={{ color: PAGE.panelText3 }}>
+                  {listings.length > 0 ? `${listings.length} live` : "None yet"}
+                </span>
+              </div>
+              {listings.length === 0 ? (
+                <p className="text-sm" style={{ color: PAGE.panelText2 }}>
+                  Live listings pending marketplace source approval.
+                </p>
+              ) : (
+                <ListingsTable listings={listings} tone="panel" />
+              )}
+            </div>
+
+            {roi ? <AiVerdict verdict={roi} /> : null}
           </div>
         </div>
       </div>
-
-      <Card className="mt-10">
-        <CardHeader>
-          <CardTitle>90-day price chart</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PriceChart data={chart} />
-        </CardContent>
-      </Card>
-
-      {roi && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Grade-ladder ROI</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <VerdictBadge verdict={roi} />
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Active listings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {listings.length === 0 ? (
-            <p className="text-sm text-zinc-600">
-              Live listings pending marketplace source approval.
-            </p>
-          ) : (
-            <ListingsTable listings={listings} />
-          )}
-        </CardContent>
-      </Card>
-
-      {card.metadata && Object.keys(card.metadata).length > 0 ? (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Catalogue metadata</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid gap-2 text-sm sm:grid-cols-2">
-              {Object.entries(card.metadata).map(([key, value]) => (
-                <div key={key}>
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">{key.replaceAll("_", " ")}</dt>
-                  <dd className="mt-0.5 break-words text-zinc-800">
-                    {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Sold comps (90 days)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CompsTable comps={comps} />
-        </CardContent>
-      </Card>
     </main>
   );
 }

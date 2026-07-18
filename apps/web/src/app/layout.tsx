@@ -1,39 +1,61 @@
-import Link from "next/link";
 import type { Metadata, Viewport } from "next";
-import { AdminNavLink } from "@/components/admin-nav-link";
+import { Hanken_Grotesk, IBM_Plex_Mono, Spectral } from "next/font/google";
+
 import { SupabaseAuthBridge } from "@/components/auth-bridge";
 import { BottomNav } from "@/components/bottom-nav";
 import { DevBanner } from "@/components/dev-banner";
-import { AuthNavDesktop, AuthNavMobile } from "@/components/auth-nav";
 import { PwaRegister } from "@/components/pwa-register";
-import { CurrencyProvider, CurrencySelect } from "@/lib/currency";
+import { SiteHeader } from "@/components/site-header";
+import { CurrencyProvider } from "@/lib/currency";
+import { ThemeProvider } from "@/lib/theme";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
+
+const spectral = Spectral({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const hanken = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-num",
+  display: "swap",
+});
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "TCG Chart — Price guide for every card",
+  title: "CardChart — Price guide for every card",
   description:
-    "Cross-marketplace comps for Pokémon, MTG, Yu-Gi-Oh!, sports and more. Ladder, shop, and grading ROI.",
-  applicationName: "TCG Chart",
+    "Cross-marketplace comps for Pokémon, MTG, Yu-Gi-Oh!, sports and more. Charts, listings, and grading ROI.",
+  applicationName: "CardChart",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "TCG Chart",
+    title: "CardChart",
   },
   icons: {
     icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
   },
   openGraph: {
-    title: "TCG Chart — Price guide for every card",
+    title: "CardChart — Price guide for every card",
     description:
-      "Cross-marketplace comps, market ladder, and grading ROI for every trading card.",
+      "Cross-marketplace comps, market indexes, and grading ROI for every trading card.",
     url: siteUrl,
-    siteName: "TCG Chart",
+    siteName: "CardChart",
   },
   formatDetection: { telephone: false },
 };
@@ -41,85 +63,28 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1d4ed8",
+  themeColor: "#B6862E",
   viewportFit: "cover",
 };
 
-const NAV = [
-  { href: "/shop", label: "Shop" },
-  { href: "/ladder", label: "Ladder" },
-  { href: "/scan", label: "Scan" },
-  { href: "/showcase", label: "Showcase" },
-  { href: "/sales", label: "Sales" },
-  { href: "/indexes", label: "Indexes" },
-  { href: "/portfolio", label: "Collection" },
-  { href: "/more", label: "More" },
-];
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-zinc-50 text-zinc-900 antialiased">
-        <CurrencyProvider>
-          <PwaRegister />
-          <SupabaseAuthBridge />
-          <DevBanner />
-            <header className="sticky top-0 z-30 hidden border-b border-zinc-200 bg-white/95 backdrop-blur sm:block">
-              <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-                <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
-                  TCG<span className="text-blue-700">Chart</span>
-                </Link>
-                <ul className="flex items-center gap-5 text-sm">
-                  {NAV.map((item) => (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={
-                          item.href === "/scan"
-                            ? "rounded-full bg-blue-700 px-4 py-1.5 font-semibold text-white hover:bg-blue-800"
-                            : "font-medium text-zinc-600 hover:text-zinc-900"
-                        }
-                      >
-                        {item.label}
-                      </Link>
-                    </li>
-                  ))}
-                  <li>
-                    <CurrencySelect />
-                  </li>
-                  <li>
-                    <AdminNavLink />
-                  </li>
-                  <li>
-                    <AuthNavDesktop />
-                  </li>
-                </ul>
-              </nav>
-            </header>
-            <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur sm:hidden">
-              <div className="flex items-center justify-between px-4 py-3">
-                <Link href="/" className="text-lg font-extrabold tracking-tight text-zinc-900">
-                  TCG<span className="text-blue-700">Chart</span>
-                </Link>
-                <div className="flex items-center gap-2">
-                  <CurrencySelect />
-                  <AuthNavMobile />
-                  <Link href="/search" aria-label="Search" className="p-1 text-zinc-600">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path
-                        d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </Link>
-                </div>
-              </div>
-            </header>
+    <html
+      lang="en"
+      className={`${spectral.variable} ${hanken.variable} ${ibmPlexMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-screen bg-[var(--bg)] text-[var(--text)] antialiased">
+        <ThemeProvider>
+          <CurrencyProvider>
+            <PwaRegister />
+            <SupabaseAuthBridge />
+            <DevBanner />
+            <SiteHeader />
             <div className="pb-24 sm:pb-0">{children}</div>
-          <BottomNav />
-        </CurrencyProvider>
+            <BottomNav />
+          </CurrencyProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

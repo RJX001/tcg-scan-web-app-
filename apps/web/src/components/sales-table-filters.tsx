@@ -51,32 +51,48 @@ export function SalesTableFilters({
     : [];
 
   return (
-    <div className="space-y-2 uppercase">
-      <RegionFilterBar value={regionFilter} onChange={onRegionFilterChange} uppercase />
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterDropdown
-          value={gradeFilter}
-          onChange={(v) => {
-            onGradeFilterChange(v);
-            onGradeSubChange("");
-          }}
-          options={GRADE_OPTIONS}
-          ariaLabel="Filter by grade company"
-        />
-        {subOptions.length > 0 ? (
-          <FilterDropdown
-            value={gradeSub}
-            onChange={onGradeSubChange}
-            options={subOptions}
-            ariaLabel="Filter by slab grade"
-          />
-        ) : null}
-        <FilterDropdown
-          value={source}
-          onChange={onSourceChange}
-          options={sourceOptions}
-          ariaLabel="Filter by marketplace"
-        />
+    <div className="space-y-2">
+      <style>{`
+        .cc-sales-filters [data-filter-chip] {
+          white-space: nowrap !important;
+          border-radius: 999px !important;
+          font-weight: 600 !important;
+          letter-spacing: 0.04em;
+        }
+      `}</style>
+      <div className="cc-sales-filters space-y-2">
+        <RegionFilterBar value={regionFilter} onChange={onRegionFilterChange} uppercase />
+        <div className="flex flex-wrap items-center gap-2">
+          <div data-filter-chip>
+            <FilterDropdown
+              value={gradeFilter}
+              onChange={(v) => {
+                onGradeFilterChange(v);
+                onGradeSubChange("");
+              }}
+              options={GRADE_OPTIONS}
+              ariaLabel="Filter by grade company"
+            />
+          </div>
+          {subOptions.length > 0 ? (
+            <div data-filter-chip>
+              <FilterDropdown
+                value={gradeSub}
+                onChange={onGradeSubChange}
+                options={subOptions}
+                ariaLabel="Filter by slab grade"
+              />
+            </div>
+          ) : null}
+          <div data-filter-chip>
+            <FilterDropdown
+              value={source}
+              onChange={onSourceChange}
+              options={sourceOptions}
+              ariaLabel="Filter by marketplace"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

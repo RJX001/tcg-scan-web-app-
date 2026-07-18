@@ -21,9 +21,12 @@ function fmtNative(n: number, currency: string) {
 
 type Props = {
   listings: ListingOut[];
+  /** `panel` = dark Daylight table surface used on card detail. */
+  tone?: "light" | "panel";
 };
 
-export function ListingsTable({ listings }: Props) {
+export function ListingsTable({ listings, tone = "light" }: Props) {
+  const panel = tone === "panel";
   const sources = useMemo(() => {
     const set = new Set(listings.map((l) => l.source));
     return Array.from(set);
@@ -49,9 +52,15 @@ export function ListingsTable({ listings }: Props) {
 
   if (listings.length === 0) {
     return (
-      <p className="text-sm text-zinc-600">No active listings in the database yet.</p>
+      <p className={`text-sm ${panel ? "text-[#BAC0CB]" : "text-zinc-600"}`}>
+        No active listings in the database yet.
+      </p>
     );
   }
+
+  const head = panel ? "text-[#8C93A1]" : "text-zinc-500";
+  const rowBorder = panel ? "border-[#2A2E37]" : "border-zinc-100";
+  const priceLink = panel ? "text-[#E0B94A] hover:underline" : "text-blue-600 hover:underline";
 
   return (
     <div className="uppercase">
@@ -68,28 +77,31 @@ export function ListingsTable({ listings }: Props) {
         onRegionFilterChange={setRegionFilter}
       />
       {filtered.length === 0 ? (
-        <p className="mt-3 text-sm normal-case text-zinc-600">No listings match the selected filters.</p>
+        <p className={`mt-3 text-sm normal-case ${panel ? "text-[#BAC0CB]" : "text-zinc-600"}`}>
+          No listings match the selected filters.
+        </p>
       ) : (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b text-zinc-500">
+              <tr className={`border-b ${head} ${panel ? "border-[#2A2E37]" : ""}`}>
                 <th className="py-2 pr-4">PRICE</th>
                 <th className="py-2 pr-4">GRADE</th>
                 <th className="py-2 pr-4">SOURCE</th>
                 <th className="py-2">MARKET</th>
+                {panel ? <th className="py-2 text-right"> </th> : null}
               </tr>
             </thead>
             <tbody>
               {filtered.map((row, i) => (
-                <tr key={`${row.listed_at}-${i}`} className="border-b border-zinc-100">
+                <tr key={`${row.listed_at}-${i}`} className={`border-b ${rowBorder}`}>
                   <td className="py-2 pr-4 font-medium normal-case">
-                    {row.listing_url ? (
+                    {row.listing_url && !panel ? (
                       <a
                         href={row.listing_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
+                        className={priceLink}
                       >
                         {fmtNative(row.price, row.currency)}
                       </a>
@@ -100,6 +112,22 @@ export function ListingsTable({ listings }: Props) {
                   <td className="py-2 pr-4">{formatGradeLabel(row.grade)}</td>
                   <td className="py-2 pr-4">{formatSourceLabel(row.source)}</td>
                   <td className="py-2">{row.market_region.toUpperCase()}</td>
+                  {panel ? (
+                    <td className="py-2 text-right">
+                      {row.listing_url ? (
+                        <a
+                          href={row.listing_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block rounded-lg bg-[#E0B94A] px-3 py-1.5 text-[12px] font-bold normal-case text-[#1A1408]"
+                        >
+                          Buy
+                        </a>
+                      ) : (
+                        <span className="text-[#8C93A1]">—</span>
+                      )}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

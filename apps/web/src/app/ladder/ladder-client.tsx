@@ -189,11 +189,11 @@ export function LadderClient() {
             key={p.days}
             type="button"
             onClick={() => setDays(p.days)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              days === p.days
-                ? "border-blue-700 bg-blue-700 text-white"
-                : "border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400"
-            }`}
+            className="whitespace-nowrap rounded-[7px] px-2.5 py-[5px] text-xs font-bold"
+            style={{
+              color: days === p.days ? "#B6862E" : "#84878F",
+              background: days === p.days ? "#F1EFE9" : "transparent",
+            }}
           >
             {p.label}
           </button>
@@ -207,11 +207,12 @@ export function LadderClient() {
             key={g.value}
             type="button"
             onClick={() => setGrade(g.value)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              grade === g.value
-                ? "border-blue-700 bg-blue-700 text-white"
-                : "border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400"
-            }`}
+            className="whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold"
+            style={{
+              borderColor: grade === g.value ? "#B6862E" : "#E4E1D8",
+              background: grade === g.value ? "#B6862E" : "#FFFFFF",
+              color: grade === g.value ? "#1A1408" : "#5B5F68",
+            }}
           >
             {g.label}
           </button>
@@ -297,14 +298,18 @@ export function LadderClient() {
         <span className="w-24 text-right">Last sold</span>
       </div>
 
-      <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+      <ul
+        className="divide-y overflow-hidden rounded-[18px] border"
+        style={{ background: "#1E2128", borderColor: "#2A2E37", color: "#F6F7F9" }}
+      >
         {rows.map((m) => {
           const img = thumb(m);
           return (
-            <li key={m.card.id}>
+            <li key={m.card.id} style={{ borderColor: "#2A2E37" }}>
               <Link
                 href={`/card/${m.card.slug}`}
-                className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 hover:bg-zinc-50 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:gap-4"
+                className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:gap-4"
+                style={{ borderColor: "#2A2E37" }}
               >
                 <div className="flex items-center gap-3">
                   {img ? (
@@ -313,30 +318,42 @@ export function LadderClient() {
                       alt={m.card.name}
                       width={36}
                       height={50}
-                      className="rounded border border-zinc-200 object-cover"
+                      className="rounded border object-cover"
+                      style={{ borderColor: "#2A2E37" }}
                     />
                   ) : (
-                    <div className="h-[50px] w-9 rounded border border-zinc-200 bg-zinc-100" />
+                    <div
+                      className="h-[50px] w-9 rounded border"
+                      style={{ borderColor: "#2A2E37", background: "#252932" }}
+                    />
                   )}
                   <div className="min-w-0">
                     <p className="truncate font-medium">
                       {m.card.name}
                       {m.card.number ? (
-                        <span className="ml-1 text-zinc-400">#{m.card.number}</span>
+                        <span className="ml-1" style={{ color: "#8C93A1" }}>
+                          #{m.card.number}
+                        </span>
                       ) : null}
                     </p>
                     <div className="mt-0.5 flex items-center gap-2">
                       <GradeBadge grade={m.last_sold_grade} />
-                      <span className="truncate text-xs text-zinc-500">
+                      <span className="truncate text-xs" style={{ color: "#8C93A1" }}>
                         {m.card.set_name ?? m.card.set_code} · {m.card.rarity ?? m.card.game}
                       </span>
                     </div>
                   </div>
                 </div>
-                <span className="hidden w-16 text-right text-sm text-zinc-600 sm:block">
+                <span
+                  className="hidden w-16 text-right text-sm sm:block"
+                  style={{ color: "#BAC0CB" }}
+                >
                   {fmtNum(m.pop_count)}
                 </span>
-                <span className="hidden w-20 text-right text-sm text-zinc-600 sm:block">
+                <span
+                  className="hidden w-20 text-right text-sm sm:block"
+                  style={{ color: "#BAC0CB" }}
+                >
                   {m.sales_count}
                 </span>
                 <span className="hidden w-24 text-right sm:block">
@@ -353,8 +370,8 @@ export function LadderClient() {
           );
         })}
         {!loading && rows.length === 0 && !error && (
-          <li className="px-4 py-8 text-center text-sm text-zinc-500">
-            No sales data yet. Run <code className="rounded bg-zinc-100 px-1">pnpm db:seed</code>{" "}
+          <li className="px-4 py-8 text-center text-sm" style={{ color: "#8C93A1" }}>
+            No sales data yet. Run <code className="rounded px-1" style={{ background: "#252932" }}>pnpm db:seed</code>{" "}
             for demo data, or adjust your filters.
           </li>
         )}

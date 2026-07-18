@@ -1,12 +1,220 @@
 @import "tailwindcss";
 
+/* Daylight design tokens (CardChart) — light default */
 :root {
-  --background: #fafafa;
-  --foreground: #09090b;
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface2: #f1efe9;
+  --border: #e4e1d8;
+  --border-soft: #ece9e0;
+  --text: #17181c;
+  --text2: #5b5f68;
+  --text3: #84878f;
+  --accent: #b6862e;
+  --accent2: #d4a53d;
+  --accent-ink: #1a1408;
+  --accent-soft: rgba(182, 134, 46, 0.1);
+  --up: #1e9a6b;
+  --down: #d6444b;
+  --hold: #b6862e;
+  --up-bg: rgba(30, 154, 107, 0.12);
+  --down-bg: rgba(214, 68, 75, 0.12);
+  --hold-bg: rgba(182, 134, 46, 0.14);
+  --eyebrow: #b6862e;
+
+  /* Dark contrast panels on the light canvas */
+  --panel: #1e2128;
+  --panel2: #252932;
+  --panel-border: #2a2e37;
+  --panel-text: #f6f7f9;
+  --panel-text2: #bac0cb;
+  --panel-text3: #8c93a1;
+  --panel-gold: #e0b94a;
+  --panel-up: #34d499;
+  --panel-down: #ff6b70;
+
+  --radius: 18px;
+  --radius-sm: 11px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 2px rgba(23, 24, 28, 0.05);
+  --shadow-lg: 0 30px 70px -24px rgba(20, 18, 10, 0.22);
+
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+/* Dark mode — Daylight pair via data-theme or .dark on html */
+html[data-theme="dark"],
+html.dark {
+  --bg: #16181d;
+  --surface: #1e2128;
+  --surface2: #252932;
+  --border: #2a2e37;
+  --border-soft: #2a2e37;
+  --text: #f6f7f9;
+  --text2: #bac0cb;
+  --text3: #8c93a1;
+  --accent: #e0b94a;
+  --accent2: #f0d26a;
+  --accent-ink: #1a1408;
+  --accent-soft: rgba(224, 185, 74, 0.14);
+  --up: #34d499;
+  --down: #ff6b70;
+  --hold: #e0b94a;
+  --up-bg: rgba(52, 212, 153, 0.14);
+  --down-bg: rgba(255, 107, 112, 0.14);
+  --hold-bg: rgba(224, 185, 74, 0.14);
+  --eyebrow: #e0b94a;
+
+  /* Panels = slightly raised surfaces in dark theme */
+  --panel: #252932;
+  --panel2: #2c313c;
+  --panel-border: #353b48;
+  --panel-text: #f6f7f9;
+  --panel-text2: #bac0cb;
+  --panel-text3: #8c93a1;
+  --panel-gold: #e0b94a;
+  --panel-up: #34d499;
+  --panel-down: #ff6b70;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 30px 70px -24px rgba(0, 0, 0, 0.55);
+
+  --background: var(--bg);
+  --foreground: var(--text);
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Typography helpers */
+.font-display {
+  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+}
+
+.font-num {
+  font-family: var(--font-num), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* CardChart utility classes */
+.cc-panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  color: var(--panel-text);
+  box-shadow: var(--shadow);
+}
+
+.cc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.cc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  cursor: pointer;
+}
+
+.cc-chip[data-active="true"],
+.cc-chip.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.cc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cc-btn:hover {
+  background: var(--accent2);
+}
+
+.cc-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cc-btn-ghost:hover {
+  background: var(--surface2);
+}
+
+@keyframes cc-scan {
+  0%,
+  100% {
+    top: 14%;
+  }
+  50% {
+    top: 82%;
+  }
+}
+
+@keyframes cc-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cc-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
 }

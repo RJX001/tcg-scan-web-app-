@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from "react";
 type Props = {
   cardId: string;
   initial?: SourcePrices;
+  /** Daylight accent styling for card detail page. */
+  tone?: "default" | "daylight";
 };
 
 const FALLBACK_LABELS: Record<string, string> = {
@@ -18,7 +20,8 @@ const FALLBACK_LABELS: Record<string, string> = {
   cardmarket: "Cardmarket",
 };
 
-export function MarketplacePrices({ cardId, initial }: Props) {
+export function MarketplacePrices({ cardId, initial, tone = "default" }: Props) {
+  const daylight = tone === "daylight";
   const [prices, setPrices] = useState<SourcePrices | undefined>(initial);
   const [days, setDays] = useState(initial?.days ?? 30);
   const [loading, setLoading] = useState(!initial);
@@ -75,19 +78,30 @@ export function MarketplacePrices({ cardId, initial }: Props) {
           },
         ];
 
+  const muted = daylight ? "text-[#84878F]" : "text-zinc-500";
+  const price = daylight ? "text-[#17181C]" : "text-zinc-900";
+  const link = daylight ? "text-[#B6862E]" : "text-blue-600";
+  const tileClass = daylight
+    ? "rounded-[11px] border border-[#E4E1D8] bg-[#F7F6F2] p-3 transition-colors hover:border-[#B6862E]/60"
+    : "rounded-lg border border-zinc-200 bg-white p-3 transition-colors hover:border-blue-300 hover:bg-blue-50/40";
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-wide text-zinc-500">
+        <p className={`text-xs uppercase tracking-wide ${muted}`}>
           Marketplace averages · last {days} days
         </p>
         {isPro ? (
-          <label className="flex items-center gap-2 text-xs text-zinc-600">
+          <label className={`flex items-center gap-2 text-xs ${daylight ? "text-[#5B5F68]" : "text-zinc-600"}`}>
             Window
             <select
               value={days}
               onChange={(e) => void load(Number(e.target.value))}
-              className="rounded border border-zinc-300 px-2 py-1 text-xs"
+              className={
+                daylight
+                  ? "rounded border border-[#E4E1D8] bg-white px-2 py-1 text-xs"
+                  : "rounded border border-zinc-300 px-2 py-1 text-xs"
+              }
               disabled={loading}
             >
               <option value={7}>7 days</option>
@@ -97,7 +111,7 @@ export function MarketplacePrices({ cardId, initial }: Props) {
             </select>
           </label>
         ) : (
-          <Link href="/account" className="text-xs text-blue-600 hover:underline">
+          <Link href="/account" className={`text-xs hover:underline ${link}`}>
             Pro: custom window in Account →
           </Link>
         )}
@@ -110,21 +124,28 @@ export function MarketplacePrices({ cardId, initial }: Props) {
           const content = (
             <>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
-                {href ? <ExternalLink className="h-3.5 w-3.5 text-zinc-400" aria-hidden /> : null}
+                <p className={`text-xs uppercase tracking-wide ${muted}`}>{label}</p>
+                {href ? (
+                  <ExternalLink
+                    className={`h-3.5 w-3.5 ${daylight ? "text-[#84878F]" : "text-zinc-400"}`}
+                    aria-hidden
+                  />
+                ) : null}
               </div>
-              <p className="mt-1 text-lg font-semibold text-zinc-900">
+              <p className={`mt-1 text-lg font-semibold ${price}`}>
                 {loading ? "…" : <Money usd={tile.avg_usd} />}
               </p>
               {tile.sample_count > 0 ? (
-                <p className="mt-1 text-xs text-zinc-500">
+                <p className={`mt-1 text-xs ${muted}`}>
                   {tile.sample_count} sale{tile.sample_count === 1 ? "" : "s"}
                 </p>
               ) : !loading && tile.avg_usd == null ? (
-                <p className="mt-1 text-xs text-zinc-400">No comps yet</p>
+                <p className={`mt-1 text-xs ${daylight ? "text-[#84878F]" : "text-zinc-400"}`}>
+                  No comps yet
+                </p>
               ) : null}
               {href ? (
-                <p className="mt-2 text-xs font-medium text-blue-600 group-hover:underline">
+                <p className={`mt-2 text-xs font-medium group-hover:underline ${link}`}>
                   Search on {label} →
                 </p>
               ) : null}
@@ -133,10 +154,7 @@ export function MarketplacePrices({ cardId, initial }: Props) {
 
           if (!href) {
             return (
-              <div
-                key={tile.source}
-                className="rounded-lg border border-zinc-200 bg-white p-3"
-              >
+              <div key={tile.source} className={tileClass}>
                 {content}
               </div>
             );
@@ -148,14 +166,14 @@ export function MarketplacePrices({ cardId, initial }: Props) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="group rounded-lg border border-zinc-200 bg-white p-3 transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+              className={`group ${tileClass}`}
             >
               {content}
             </a>
           );
         })}
       </div>
-      <p className="mt-2 text-xs text-zinc-400">
+      <p className={`mt-2 text-xs ${daylight ? "text-[#84878F]" : "text-zinc-400"}`}>
         Averages from sold comps in our database. Tap a tile to search live listings on that marketplace.
       </p>
     </div>
