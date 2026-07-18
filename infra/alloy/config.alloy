@@ -21,7 +21,7 @@ otelcol.processor.batch "default" {
 	output {
 		metrics = [otelcol.exporter.prometheus.grafana_cloud.input]
 		logs    = [otelcol.exporter.loki.grafana_cloud.input]
-		traces  = [otelcol.exporter.otlphttp.grafana_cloud.input]
+		traces  = [otelcol.exporter.otlp.grafana_cloud.input]
 	}
 }
 
@@ -59,14 +59,18 @@ loki.write "grafana_cloud" {
 	}
 }
 
-// --- Traces → Grafana Cloud Tempo ---
+// --- Traces → Grafana Cloud Tempo (OTLP gRPC) ---
+// Per Grafana Cloud docs (traces-with-alloy): use otelcol.exporter.otlp
+// with host:443 — NOT the Tempo query URL (.../tempo) and NOT otlphttp /v1/traces.
+// Example TEMPO_URL: https://tempo-prod-10-prod-eu-west-2.grafana.net:443
+// Portal "Tempo URL" ending in /tempo is for querying only.
 
 otelcol.auth.basic "grafana_cloud_traces" {
 	username = sys.env("TEMPO_USERNAME")
 	password = sys.env("GRAFANA_CLOUD_ACCESS_POLICY_TOKEN")
 }
 
-otelcol.exporter.otlphttp "grafana_cloud" {
+otelcol.exporter.otlp "grafana_cloud" {
 	client {
 		endpoint = sys.env("TEMPO_URL")
 		auth     = otelcol.auth.basic.grafana_cloud_traces.handler
