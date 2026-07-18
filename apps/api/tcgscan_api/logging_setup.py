@@ -53,7 +53,9 @@ def configure_logging() -> None:
         processors=shared_processors,
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
+        # False so monorepo tests (and capture_logs) can reconfigure processors;
+        # cached BoundLoggers ignore later structlog.configure() calls.
+        cache_logger_on_first_use=False,
     )
 
     foreign_pre_chain: list[structlog.types.Processor] = [

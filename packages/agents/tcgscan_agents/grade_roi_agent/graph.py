@@ -10,7 +10,7 @@ from tcgscan_agents.budget import BudgetGuard
 from tcgscan_agents.tools.pricing import _api_base
 from tcgscan_agents.tracing import traced
 
-log = structlog.get_logger()
+log = structlog.get_logger(__name__)
 
 
 class GradeROIInput(BaseModel):

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import structlog
 
-log = structlog.get_logger()
+log = structlog.get_logger(__name__)
 
 
 class BudgetExceededError(RuntimeError):

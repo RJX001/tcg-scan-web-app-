@@ -10,7 +10,7 @@ import structlog
 P = ParamSpec("P")
 R = TypeVar("R")
 
-log = structlog.get_logger()
+log = structlog.get_logger(__name__)
 
 
 def traced(name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
