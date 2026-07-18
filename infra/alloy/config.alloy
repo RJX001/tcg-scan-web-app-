@@ -1,0 +1,74 @@
+// Grafana Alloy — receives OTLP from apps, ships to Grafana Cloud.
+// Credentials and endpoints come from environment variables (set in Railway).
+
+otelcol.receiver.otlp "default" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+		logs    = [otelcol.processor.batch.default.input]
+		traces  = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		metrics = [otelcol.exporter.prometheus.grafana_cloud.input]
+		logs    = [otelcol.exporter.loki.grafana_cloud.input]
+		traces  = [otelcol.exporter.otlphttp.grafana_cloud.input]
+	}
+}
+
+// --- Metrics → Grafana Cloud Prometheus / Mimir ---
+
+otelcol.exporter.prometheus "grafana_cloud" {
+	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+	endpoint {
+		url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+
+		basic_auth {
+			username = sys.env("PROMETHEUS_USERNAME")
+			password = sys.env("GRAFANA_CLOUD_ACCESS_POLICY_TOKEN")
+		}
+	}
+}
+
+// --- Logs → Grafana Cloud Loki ---
+
+otelcol.exporter.loki "grafana_cloud" {
+	forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+	endpoint {
+		url = sys.env("LOKI_URL")
+
+		basic_auth {
+			username = sys.env("LOKI_USERNAME")
+			password = sys.env("GRAFANA_CLOUD_ACCESS_POLICY_TOKEN")
+		}
+	}
+}
+
+// --- Traces → Grafana Cloud Tempo ---
+
+otelcol.auth.basic "grafana_cloud_traces" {
+	username = sys.env("TEMPO_USERNAME")
+	password = sys.env("GRAFANA_CLOUD_ACCESS_POLICY_TOKEN")
+}
+
+otelcol.exporter.otlphttp "grafana_cloud" {
+	client {
+		endpoint = sys.env("TEMPO_URL")
+		auth     = otelcol.auth.basic.grafana_cloud_traces.handler
+	}
+}
