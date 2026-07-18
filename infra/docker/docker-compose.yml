@@ -45,6 +45,26 @@ services:
       - "7233:7233"
       - "8233:8233"
 
+  # Optional: local Alloy → Grafana Cloud (needs env from .env / shell).
+  # docker compose -f infra/docker/docker-compose.yml --profile observability up -d alloy
+  alloy:
+    profiles: ["observability"]
+    build:
+      context: ../alloy
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "12345:12345"
+    environment:
+      GRAFANA_CLOUD_ACCESS_POLICY_TOKEN: ${GRAFANA_CLOUD_ACCESS_POLICY_TOKEN:-}
+      PROMETHEUS_REMOTE_WRITE_URL: ${PROMETHEUS_REMOTE_WRITE_URL:-}
+      PROMETHEUS_USERNAME: ${PROMETHEUS_USERNAME:-}
+      LOKI_URL: ${LOKI_URL:-}
+      LOKI_USERNAME: ${LOKI_USERNAME:-}
+      TEMPO_URL: ${TEMPO_URL:-}
+      TEMPO_USERNAME: ${TEMPO_USERNAME:-}
+      PORT: "12345"
+
 volumes:
   postgres_data:
   qdrant_data:
