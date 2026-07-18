@@ -1,5 +1,8 @@
 # TCG Chart — Supabase Auth Migration Guide
 
+> **Historical runbook.** Supabase Auth is live; Clerk is removed.
+> Do not re-execute these phases. Prefer `docs/CLERK_REMOVAL_AND_SUPABASE_AUTH_REPORT.md` and current `AGENTS.md`.
+
 ## Decision
 
 We are stopping the Clerk auth integration and migrating to **Supabase Auth**.

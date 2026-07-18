@@ -1,139 +1,80 @@
-<<<<<<< Updated upstream
-# CLAUDE.md — TCG Scan repo conventions
+# CLAUDE.md — TCG Scan / TCG Chart repo conventions
 
 Read **AGENTS.md** first. Canonical product spec: **docs/TCG_Scan_Phase1.md**.
 
+Shipped UI brand: **TCG Chart**. Package / docs name: **TCG Scan**.
+
 ## Architecture (locked)
 
-Monorepo: `pnpm` + Turborepo. Apps: `web` (Next.js 15), `api` (FastAPI), `worker` (Temporal), `ml` (Modal). Packages: `schema`, `sdk-ts`, `sdk-py`, `ui`, `agents`.
+Monorepo: `pnpm` + Turborepo + `uv`.
 
-Data: Postgres 16 (+ pgvector), Qdrant (image embeddings), Redis. Auth: Clerk. Payments: Stripe. Agents: LangGraph + Claude. No sync Python HTTP (`requests`/`psycopg2`). No secrets in git.
+| App / package | Role |
+|---|---|
+| `apps/web` | Next.js 15 (App Router) |
+| `apps/api` | FastAPI `/v1` |
+| `apps/worker` | Temporal worker (catalog, pricing, rollup, alerts, digest) |
+| `apps/ml` | Modal endpoints (detect / embed / ocr / grade) |
+| `packages/sdk-ts` | TypeScript API client (hand-maintained until OpenAPI codegen lands) |
+| `packages/sdk-py` | Internal Python client |
+| `packages/schema` | Shared JSON Schema scaffolds |
+| `packages/ui` | Shared React components |
+| `packages/agents` | LangGraph graphs |
 
-## Commands
+**Data:** Postgres 16 + pgvector (app OLTP — local Docker / Railway). **Auth:** Supabase Auth (JWT only; not the app DB). Qdrant (image embeddings). Redis (cache / rate limits). **Payments:** Stripe. **Agents:** LangGraph (+ Claude when wired).
 
-```bash
-pnpm dev              # all apps
-pnpm lint && pnpm typecheck && pnpm test
-pnpm schema:build     # after schema changes
-pnpm sdk:generate     # after API OpenAPI changes
-```
-
-## Slash commands
-
-See `.cursor/commands.md` for `/bootstrap`, `/scaffold-endpoint`, `/new-agent`, etc.
-=======
-# TCG Scan Phase 1
-
-AI-native price intelligence for TCG collectors. CardLadder competitor, TCG-focused.
-Phase 1: web-only. Phase 2: TCG Vault vendor SaaS (not in scope yet).
+**One rule:** `apps/web` never calls eBay, TCGPlayer, Cardmarket, or other marketplaces. External data → worker (or admin ingest on the API) → Postgres. Web → our API only (`NEXT_PUBLIC_API_URL`).
 
 ## Commands
 
-### Backend
 ```bash
-cd backend
-poetry install                        # install dependencies
-docker compose up -d                  # start Postgres + PgBouncer + Redis
-poetry run alembic upgrade head       # run migrations (seeds 5 games + 17 grades)
-poetry run uvicorn app.main:app --reload --port 8000
-poetry run pytest -x                  # run tests
-poetry run pytest tests/test_health.py  # run single test file
-poetry run ruff check app             # lint
-poetry run mypy app                   # type check
-```
-
-### Frontend
-```bash
-cd frontend
 pnpm install
-pnpm dev                              # runs on http://localhost:3000
-pnpm build                            # production build
-pnpm type-check                       # tsc --noEmit
-pnpm lint
+docker compose -f infra/docker/docker-compose.yml up -d postgres qdrant redis
+uv sync --all-packages
+pnpm db:demo
+pnpm dev --filter @tcgscan/web --filter @tcgscan/api
+
+pnpm lint && pnpm typecheck && pnpm test
+pnpm schema:build     # after schema package changes
+pnpm sdk:generate     # placeholder until OpenAPI codegen is wired
 ```
 
-### Docker services
-```bash
-docker compose up -d                  # start all services
-docker compose ps                     # check status
-docker compose logs celery            # celery worker logs
-```
+## Auth (current)
 
-### Celery
-```bash
-cd backend
-poetry run celery -A app.tasks.celery_app worker --loglevel=info
-poetry run celery -A app.tasks.celery_app beat --loglevel=info
-```
+- Web: Supabase SSR (`@supabase/ssr`) + middleware on protected routes.
+- API: `AuthMiddleware` verifies Supabase JWT (`SUPABASE_JWT_SECRET` or `SUPABASE_JWKS_URL`).
+- Dev: `DEV_AUTH_ENABLED=true` + `X-Dev-User-Id` (blocked when `ENVIRONMENT=production`).
+- Clerk is **removed** — see `docs/CLERK_REMOVAL_AND_SUPABASE_AUTH_REPORT.md`.
 
-## Architecture — THE ONE RULE
+## Key product rules
 
-The frontend NEVER calls eBay, TCGplayer, Cardmarket or any external API.
-- External data → Celery tasks in `backend/app/sources/` → PostgreSQL
-- Frontend → our FastAPI only (`NEXT_PUBLIC_API_URL`)
+- eBay links should include EPN affiliate tags when `EBAY_AFFILIATE_*` is set.
+- Prefer ≥5 sales before treating comps as a solid market value (UI gates thin data).
+- Free tier: 10 scans/day, 25 portfolio cards; Pro gates alerts, watchlist, saved searches, digest.
+- Pro gating is enforced on the **API** (`require_pro`, scan rate limits). Web shows soft upgrade copy.
 
-## Project Structure
-
-```
-backend/app/
-  api/v1/routes/     route handlers (read from DB only)
-  services/          business logic
-  repositories/      DB query layer
-  models/            SQLAlchemy 2 models
-  schemas/           Pydantic v2 request/response
-  agents/            LangGraph AI agents (4 agents)
-  tasks/             Celery tasks (the only place that calls external APIs)
-  sources/           external data sources
-    ebay/            official Browse API only
-    tcgapis/         paid aggregator (subscribe at £500 MRR)
-    cardmarket_scraper/  Apify stopgap, max 500/day, disabled by default
-    catalogue/       free APIs: Scryfall, PTCGIO, YGOPRODECK
-    reddit/          sentiment signals
-  core/              config, auth, cache, limiter
-
-frontend/src/
-  app/               Next.js 14 App Router pages
-  lib/api/           API clients (one per resource, calls OUR backend only)
-  components/        Nav, ProGate, Skeleton, QueryProvider
-  hooks/             useSubscription, useCards, usePortfolio, useMarket
-  stores/            Zustand auth store
-  styles/            design tokens (never hardcode colours)
-```
-
-## Key Constraints
-
-- Python 3.11 — type hints everywhere
-- SQLAlchemy 2 ORM only — never raw SQL
-- Alembic for all schema changes — never ALTER TABLE manually
-- PgBouncer on port 6432 — not Postgres directly on 5432
-- All AI agents gated by `ENABLE_AI_AGENTS=false` env var
-- AI agent model: `claude-sonnet-4-6` — never change without instruction
-- eBay links must include EPN affiliate tag — never return raw eBay URLs
-- Minimum 5 sales before showing TCG Value — show "Insufficient data" otherwise
-- Free tier: 10 portfolio cards, 5 alerts, Market Pulse summary only
-- Both frontend (useSubscription hook) AND backend (check_subscription_tier) enforce Pro gating
-
-## Data Sources — Risk Rules
+## Data sources (as-built)
 
 | Source | Status | Notes |
 |---|---|---|
-| eBay Browse API | ACTIVE | Official, 5k calls/day free |
-| Scryfall / PTCGIO / YGOPRODECK | ACTIVE | Free catalogues |
-| Reddit API | ACTIVE | Official, free with auth |
-| Cardmarket (Apify) | STOPGAP | Max 500/day, disabled by default |
-| TCGAPIs (paid) | NOT YET | Subscribe at £500 MRR |
-| eBay HTML scraping | FORBIDDEN | Use Browse API instead |
-| TCGplayer direct | FORBIDDEN | eBay-owned, use TCGAPIs |
+| eBay Browse API | Implemented | Needs production keys + Account Deletion compliance |
+| eBay Insights (sold) | Optional | Falls back to Browse without `EBAY_INSIGHTS_TOKEN` |
+| Scryfall / PTCGIO / YGOPRODECK / Lorcast / OPTCG | Implemented | Catalog clients in API + worker |
+| TCGPlayer (via tcgapi.dev) | Implemented | Needs `TCG_API_KEY` |
+| Cardmarket (Apify) | Partial | Dataset poll; needs `APIFY_TOKEN` |
+| Reddit | Not implemented | |
+| eBay HTML scraping | Forbidden | Use Browse / Insights only |
+| TCGplayer direct scrape | Forbidden | Use aggregator API |
 
-## Sprint 1 — Start Here
+## Status honesty
 
-Implement the three free catalogue sources:
-1. `PokemonTcgIOClient.fetch_all_cards()` in `backend/app/sources/catalogue/__init__.py`
-2. `ScryfallClient.fetch_all_cards()` in the same file
-3. `YgoProDeckClient.fetch_all_cards()` in the same file
+Local demo (`pnpm db:demo`) is walkable. Closed beta still needs Modal weights, live ingest keys, Stripe webhook in prod, and KPI gates — see `docs/runbooks/beta-launch.md` and `docs/PROJECT_TRACKING.md`.
 
-Then wire the eBay Browse API in `backend/app/sources/ebay/__init__.py`.
-Then implement `compute_tcg_values()` in `backend/app/tasks/compute_values.py`.
+## Obsolete files (do not follow)
 
-See `CURSOR_CONTEXT.md` for the full sprint map and all endpoint details.
->>>>>>> Stashed changes
+- `CURSOR_CONTEXT.md` — abandoned `backend/` + Celery sketch
+- `CLAUDE_CODE_GUIDE.md` — same obsolete layout
+- Historical Clerk→Supabase migration write-ups under `docs/SUPABASE_AUTH_*` (migration complete)
+
+## Slash commands
+
+See `.cursor/commands.md` (or `cursor_commands.md`) for `/bootstrap`, `/scaffold-endpoint`, `/new-agent`, etc.

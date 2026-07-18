@@ -1,5 +1,14 @@
-# TCG SCAN PHASE 1 — CURSOR CONTEXT FILE
-# Drag this file into every Cursor Agent session alongside .cursorrules
+# OBSOLETE — DO NOT USE FOR ARCHITECTURE OR SPRINT WORK
+
+> **This file describes an abandoned layout** (`backend/` + `frontend/` + Celery + Next.js 14 + Clerk/password sketch).
+> The live monorepo is `apps/{web,api,worker,ml}` + `packages/*` with **Temporal**, **Supabase Auth**, and Pro at **$9.99/mo**.
+>
+> Use instead: **`AGENTS.md`**, **`CLAUDE.md`**, **`docs/TCG_Scan_Phase1.md`**, **`docs/PROJECT_TRACKING.md`**.
+> Kept only for historical reference. Last useful update: May 2026.
+
+---
+
+# TCG SCAN PHASE 1 — CURSOR CONTEXT FILE (ARCHIVED)
 # Last updated: May 2026
 
 ---
@@ -8,9 +17,9 @@
 
 Product: TCG Scan Phase 1 — AI-native price intelligence platform for TCG collectors
 Competitor: CardLadder (sports only, no AI) — we beat them on TCG coverage + AI agents
-Price: Free tier + Pro at £5.99/month
-Stack: FastAPI + PostgreSQL + Redis + Celery + Next.js 14 + LangGraph
-Repo root: tcg-scan-phase-1/
+Price: Free tier + Pro at £5.99/month  ← **obsolete; live docs use $9.99/mo**
+Stack: FastAPI + PostgreSQL + Redis + Celery + Next.js 14 + LangGraph  ← **obsolete**
+Repo root: tcg-scan-phase-1/  ← **obsolete**
 
 ---
 
