@@ -4,4 +4,3 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "apps/api/Dockerfile"
-buildContext = "."
