@@ -78,5 +78,9 @@ class ScryfallClient:
                 cards.append(normalized)
                 if limit is not None and len(cards) >= limit:
                     break
-            url = payload.get("next_page") if isinstance(payload, dict) and payload.get("has_more") else None
+            url = (
+                payload.get("next_page")
+                if isinstance(payload, dict) and payload.get("has_more")
+                else None
+            )
         return cards if limit is None else cards[:limit]

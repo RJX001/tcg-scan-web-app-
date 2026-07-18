@@ -50,9 +50,7 @@ def upgrade() -> None:
     op.create_unique_constraint("uq_users_account_number", "users", ["account_number"])
     op.create_index("ix_users_account_number", "users", ["account_number"])
 
-    op.execute(
-        "UPDATE users SET role = 'owner' WHERE email = 'RJ_OWNER_EMAIL_HERE'"
-    )
+    op.execute("UPDATE users SET role = 'owner' WHERE email = 'RJ_OWNER_EMAIL_HERE'")
 
 
 def downgrade() -> None:

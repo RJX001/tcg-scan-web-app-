@@ -31,7 +31,9 @@ OPTCG_CARD = {
 
 
 def _mock_one_piece_endpoints() -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(
+        return_value=Response(200, json=[OPTCG_CARD])
+    )
     respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
     respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(200, json=[]))
     respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
@@ -57,7 +59,12 @@ async def admin_headers(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
     return {"X-Dev-User-Id": "admin-user"}
 
@@ -89,9 +96,13 @@ async def test_ingest_dry_run_does_not_write_db(sqlite_session: object) -> None:
 
 
 def _mock_one_piece_endpoints_promo_404() -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(
+        return_value=Response(200, json=[OPTCG_CARD])
+    )
     respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
-    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(404, json={"detail": "Not found"}))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(
+        return_value=Response(404, json={"detail": "Not found"})
+    )
     respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
 
 
@@ -162,19 +173,30 @@ async def test_card_detail_price_pending(api_client: AsyncClient, sqlite_session
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_admin_ingest_requires_admin(api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_admin_ingest_requires_admin(
+    api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "plain-user", tier="free", role="user"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "plain-user",
+            tier="free",
+            role="user",
+        ),
     )
-    r = await api_client.post("/v1/admin/sources/ingest/one-piece", headers={"X-Dev-User-Id": "plain-user"})
+    r = await api_client.post(
+        "/v1/admin/sources/ingest/one-piece", headers={"X-Dev-User-Id": "plain-user"}
+    )
     assert r.status_code == 403
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_admin_ingest_one_piece(api_client: AsyncClient, admin_headers: dict[str, str]) -> None:
+async def test_admin_ingest_one_piece(
+    api_client: AsyncClient, admin_headers: dict[str, str]
+) -> None:
     _mock_one_piece_endpoints()
     r = await api_client.post("/v1/admin/sources/ingest/one-piece", headers=admin_headers)
     assert r.status_code == 200

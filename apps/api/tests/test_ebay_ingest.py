@@ -60,7 +60,12 @@ async def admin_headers(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
     return {"X-Dev-User-Id": "admin-user"}
 
@@ -151,9 +156,16 @@ async def test_ebay_ingest_route_requires_admin(
     user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "plain-user", tier="free", role="user"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "plain-user",
+            tier="free",
+            role="user",
+        ),
     )
-    r = await api_client.post("/v1/admin/sources/ingest/ebay", headers={"X-Dev-User-Id": "plain-user"})
+    r = await api_client.post(
+        "/v1/admin/sources/ingest/ebay", headers={"X-Dev-User-Id": "plain-user"}
+    )
     assert r.status_code == 403
 
 

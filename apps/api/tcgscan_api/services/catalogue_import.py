@@ -150,9 +150,7 @@ async def recover_stale_catalogue_imports(session: AsyncSession) -> int:
                 preserve_batch_cursor=True,
             )
         except Exception as exc:  # pragma: no cover - fail_stale_runs is itself guarded
-            log.warning(
-                "catalogue_import.stale_recovery_failed", source=source_key, error=str(exc)
-            )
+            log.warning("catalogue_import.stale_recovery_failed", source=source_key, error=str(exc))
             continue
     if reclaimed:
         log.info("catalogue_import.stale_runs_reclaimed", count=reclaimed)
@@ -238,8 +236,10 @@ async def _process_rows(
             error_message=_optional_skip_error_message(optional_skipped) or "dry_run",
             started_at=started_at,
         )
-        message = _one_piece_import_message(len(rows), optional_skipped) if optional_skipped else (
-            f"Dry run: {len(rows)} cards ready to upsert"
+        message = (
+            _one_piece_import_message(len(rows), optional_skipped)
+            if optional_skipped
+            else (f"Dry run: {len(rows)} cards ready to upsert")
         )
         return ImportResult(
             source_run_id=str(finished.id),
@@ -529,7 +529,9 @@ async def execute_full_catalogue_import(
 ) -> None:
     """Background worker: fetch full catalogue and upsert in batches."""
     if session is not None:
-        await _execute_full_catalogue_import(session, run_id, source_key, limit=limit, dry_run=dry_run)
+        await _execute_full_catalogue_import(
+            session, run_id, source_key, limit=limit, dry_run=dry_run
+        )
         return
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as db_session:
@@ -688,16 +690,16 @@ async def _source_run_stats(
     last_full = await runs.last_success(source_key, run_type="full")
     last_failed = await runs.last_failed(source_key, run_type="full")
     import_status_message: str | None = None
-    if last_failed and last_failed.error_message and STALE_RUN_ERROR_MESSAGE in last_failed.error_message:
-        import_status_message = (
-            "Previous import timed out or browser disconnected. Safe to retry."
-        )
+    if (
+        last_failed
+        and last_failed.error_message
+        and STALE_RUN_ERROR_MESSAGE in last_failed.error_message
+    ):
+        import_status_message = "Previous import timed out or browser disconnected. Safe to retry."
     return {
         **row,
         "last_sample_at": (
-            last_sample.finished_at.isoformat()
-            if last_sample and last_sample.finished_at
-            else None
+            last_sample.finished_at.isoformat() if last_sample and last_sample.finished_at else None
         ),
         "last_full_at": (
             last_full.finished_at.isoformat() if last_full and last_full.finished_at else None
@@ -740,8 +742,6 @@ async def catalogue_stats(session: AsyncSession) -> dict[str, Any]:
                 await session.rollback()
             except Exception:  # pragma: no cover - rollback should not raise
                 pass
-            log.warning(
-                "catalogue_import.source_stats_failed", source=source_key, error=str(exc)
-            )
+            log.warning("catalogue_import.source_stats_failed", source=source_key, error=str(exc))
             stats.append(_failed_source_stats(row))
     return {"catalog_stats": stats}

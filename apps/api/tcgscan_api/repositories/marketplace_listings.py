@@ -74,8 +74,10 @@ class MarketplaceListingsRepo:
         return inserted, updated, skipped
 
     async def count_active(self, *, source: str | None = None) -> int:
-        stmt = select(func.count()).select_from(MarketplaceListing).where(
-            MarketplaceListing.listing_status == "active"
+        stmt = (
+            select(func.count())
+            .select_from(MarketplaceListing)
+            .where(MarketplaceListing.listing_status == "active")
         )
         if source:
             stmt = stmt.where(MarketplaceListing.source == source)
@@ -132,9 +134,13 @@ class MarketplaceListingsRepo:
             stmt = stmt.where(MarketplaceListing.observed_at <= listed_before)
 
         if sort == "price_asc":
-            stmt = stmt.order_by(MarketplaceListing.price.asc(), MarketplaceListing.observed_at.desc())
+            stmt = stmt.order_by(
+                MarketplaceListing.price.asc(), MarketplaceListing.observed_at.desc()
+            )
         elif sort == "price_desc":
-            stmt = stmt.order_by(MarketplaceListing.price.desc(), MarketplaceListing.observed_at.desc())
+            stmt = stmt.order_by(
+                MarketplaceListing.price.desc(), MarketplaceListing.observed_at.desc()
+            )
         else:
             stmt = stmt.order_by(MarketplaceListing.observed_at.desc())
 

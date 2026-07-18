@@ -140,7 +140,9 @@ async def ebay_listing_stats(session: AsyncSession) -> dict[str, Any]:
             {
                 "source_key": "ebay",
                 "listing_count": await listings.count_active(source="ebay"),
-                "last_success_at": last.finished_at.isoformat() if last and last.finished_at else None,
+                "last_success_at": last.finished_at.isoformat()
+                if last and last.finished_at
+                else None,
                 "last_run_id": str(last.id) if last else None,
             }
         ]

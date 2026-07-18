@@ -5,9 +5,7 @@ from __future__ import annotations
 from tcgscan_api.db.models import CardIdentity, Game
 
 # Longest game prefix first so `dragon_ball_fusion_world` wins over `dragon`.
-_GAME_VALUES: tuple[str, ...] = tuple(
-    sorted((g.value for g in Game), key=len, reverse=True)
-)
+_GAME_VALUES: tuple[str, ...] = tuple(sorted((g.value for g in Game), key=len, reverse=True))
 
 
 def _game_str(game: Game | str) -> str:

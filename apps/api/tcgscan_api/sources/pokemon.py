@@ -65,7 +65,9 @@ class PokemonClient:
         api_key = os.getenv("POKEMONTCG_API_KEY", "").strip()
         if api_key:
             headers["X-Api-Key"] = api_key
-        self._http = SourceHttpClient(base_url=url, rate_per_sec=4.0, burst=8, headers=headers, timeout_s=30.0)
+        self._http = SourceHttpClient(
+            base_url=url, rate_per_sec=4.0, burst=8, headers=headers, timeout_s=30.0
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

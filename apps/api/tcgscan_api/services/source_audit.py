@@ -25,9 +25,7 @@ def _env_flags(names: list[str]) -> dict[str, bool]:
 
 
 def _ebay_configured() -> bool:
-    return _env_set("EBAY_OAUTH_TOKEN") or (
-        _env_set("EBAY_APP_ID") and _env_set("EBAY_CERT_ID")
-    )
+    return _env_set("EBAY_OAUTH_TOKEN") or (_env_set("EBAY_APP_ID") and _env_set("EBAY_CERT_ID"))
 
 
 def _apify_cardmarket_enabled() -> bool:
@@ -73,7 +71,9 @@ def _catalog_game_status(
         "optional_env": _env_flags(optional),
         "api_module": api_module,
         "worker_module": worker_module or worker_modules.get(game),
-        "ingest_command": f"pnpm ingest:catalog -- --game {game}" if game in worker_modules else None,
+        "ingest_command": f"pnpm ingest:catalog -- --game {game}"
+        if game in worker_modules
+        else None,
         "schedule": f"catalog-weekly-{game} (Temporal)" if game in worker_modules else None,
         "notes": notes,
     }
@@ -102,7 +102,9 @@ def build_sources_status(data_health: list[dict[str, object]] | None = None) -> 
             "worker_module": worker_module,
             "ingest_job": ingest_job,
             "ingest_command": ingest_command,
-            "data_health": health_by_source.get(source_id.replace("_sold", "").replace("_active", "ebay")),
+            "data_health": health_by_source.get(
+                source_id.replace("_sold", "").replace("_active", "ebay")
+            ),
             "notes": notes,
         }
 
@@ -333,7 +335,12 @@ async def test_scryfall_connection() -> dict[str, Any]:
                 headers={"User-Agent": "tcgscan/0.0.0", "Accept": "application/json"},
             )
             resp.raise_for_status()
-        return {"status": "success", "provider": "scryfall", "message": "Scryfall reachable", "ok": True}
+        return {
+            "status": "success",
+            "provider": "scryfall",
+            "message": "Scryfall reachable",
+            "ok": True,
+        }
     except Exception as exc:
         return {"status": "failed", "provider": "scryfall", "message": str(exc), "ok": False}
 
