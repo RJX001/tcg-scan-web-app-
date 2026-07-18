@@ -31,7 +31,9 @@ def _affiliate_url(item_url: str, settings: Settings) -> tuple[str, str]:
     tracking = (settings.ebay_affiliate_tracking_id or "").strip()
     campaign = (settings.ebay_affiliate_campaign_id or "").strip()
     if tracking and campaign:
-        return build_ebay_affiliate_url(item_url, tracking_id=tracking, campaign_id=campaign), "configured"
+        return build_ebay_affiliate_url(
+            item_url, tracking_id=tracking, campaign_id=campaign
+        ), "configured"
     return item_url, "not_configured"
 
 

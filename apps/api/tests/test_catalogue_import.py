@@ -81,14 +81,19 @@ def _pokemon_page_payload(page: int, *, total_pages: int, page_size: int = 1) ->
     }
 
 
-def _mock_pokemon_pages(total_pages: int, *, page_size: int = 1, fail_page: int | None = None) -> None:
+def _mock_pokemon_pages(
+    total_pages: int, *, page_size: int = 1, fail_page: int | None = None
+) -> None:
     def handler(request: httpx.Request) -> Response:
         page = int(request.url.params.get("page", "1"))
         if fail_page is not None and page == fail_page:
             return Response(500, json={"error": "fail"})
-        return Response(200, json=_pokemon_page_payload(page, total_pages=total_pages, page_size=page_size))
+        return Response(
+            200, json=_pokemon_page_payload(page, total_pages=total_pages, page_size=page_size)
+        )
 
     respx.get("https://api.pokemontcg.io/v2/cards").mock(side_effect=handler)
+
 
 SCRYFALL_PAGE = {
     "object": "list",
@@ -111,23 +116,36 @@ YGO_CARD = {
     "id": 46986414,
     "name": "Dark Magician",
     "type": "Spell Card",
-    "card_sets": [{"set_code": "SDY", "set_name": "Starter Deck", "set_rarity": "Ultra Rare", "set_rarity_code": "UR"}],
+    "card_sets": [
+        {
+            "set_code": "SDY",
+            "set_name": "Starter Deck",
+            "set_rarity": "Ultra Rare",
+            "set_rarity_code": "UR",
+        }
+    ],
     "card_images": [{"image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg"}],
     "card_prices": [{"tcgplayer_price": "1.00"}],
 }
 
 
 def _mock_one_piece_endpoints() -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(
+        return_value=Response(200, json=[OPTCG_CARD])
+    )
     respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
     respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(200, json=[]))
     respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
 
 
 def _mock_one_piece_endpoints_promo_404() -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD]))
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(
+        return_value=Response(200, json=[OPTCG_CARD])
+    )
     respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
-    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(404, json={"detail": "Not found"}))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(
+        return_value=Response(404, json={"detail": "Not found"})
+    )
     respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
 
 
@@ -151,7 +169,12 @@ async def admin_headers(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
     return {"X-Dev-User-Id": "admin-user"}
 
@@ -165,9 +188,16 @@ async def test_import_route_requires_admin(
     user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "plain-user", tier="free", role="user"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "plain-user",
+            tier="free",
+            role="user",
+        ),
     )
-    r = await api_client.post("/v1/admin/sources/import/pokemon", headers={"X-Dev-User-Id": "plain-user"})
+    r = await api_client.post(
+        "/v1/admin/sources/import/pokemon", headers={"X-Dev-User-Id": "plain-user"}
+    )
     assert r.status_code == 403
 
 
@@ -424,9 +454,7 @@ async def test_status_returns_200_with_null_started_at(
     await sqlite_session.commit()
 
     # started_at unreadable → age None → treated as stale, never crashes.
-    monkeypatch.setattr(
-        "tcgscan_api.repositories.source_runs._run_age_seconds", lambda _v: None
-    )
+    monkeypatch.setattr("tcgscan_api.repositories.source_runs._run_age_seconds", lambda _v: None)
 
     r = await api_client.get("/v1/admin/sources/status", headers=admin_headers)
     assert r.status_code == 200
@@ -668,7 +696,9 @@ async def test_pokemon_stuck_running_becomes_failed_when_stale(
 @pytest.mark.asyncio
 @respx.mock
 async def test_pokemon_full_import_dry_run(sqlite_session: object) -> None:
-    respx.get("https://api.pokemontcg.io/v2/cards").mock(return_value=Response(200, json=POKEMON_PAGE))
+    respx.get("https://api.pokemontcg.io/v2/cards").mock(
+        return_value=Response(200, json=POKEMON_PAGE)
+    )
     result = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=True)
     assert result.status == "success"
     assert result.inserted_count == 1
@@ -678,7 +708,9 @@ async def test_pokemon_full_import_dry_run(sqlite_session: object) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_scryfall_full_import_dry_run(sqlite_session: object) -> None:
-    respx.get("https://api.scryfall.com/cards/search").mock(return_value=Response(200, json=SCRYFALL_PAGE))
+    respx.get("https://api.scryfall.com/cards/search").mock(
+        return_value=Response(200, json=SCRYFALL_PAGE)
+    )
     result = await start_full_catalogue_import(sqlite_session, "scryfall", dry_run=True)
     assert result.status == "success"
     assert result.inserted_count == 1
@@ -708,7 +740,9 @@ async def test_one_piece_full_import_dry_run(sqlite_session: object) -> None:
 @respx.mock
 async def test_one_piece_full_import_succeeds_when_promo_404(sqlite_session: object) -> None:
     _mock_one_piece_endpoints_promo_404()
-    result = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False, force=True)
+    result = await start_full_catalogue_import(
+        sqlite_session, "one_piece", dry_run=False, force=True
+    )
     assert result.status == "success"
     assert result.inserted_count == 1
     assert result.skipped_count >= 1
@@ -770,12 +804,16 @@ async def test_full_import_runs_synchronously_and_records_success(sqlite_session
 @respx.mock
 async def test_full_import_upserts_without_duplicates(sqlite_session: object) -> None:
     _mock_one_piece_endpoints()
-    first = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False, force=True)
+    first = await start_full_catalogue_import(
+        sqlite_session, "one_piece", dry_run=False, force=True
+    )
     assert first.status == "success"
     count1 = await SourceRunsRepo(sqlite_session).count_cards_by_source("optcgapi")
     assert count1 == 1
 
-    second = await start_full_catalogue_import(sqlite_session, "one_piece", dry_run=False, force=True)
+    second = await start_full_catalogue_import(
+        sqlite_session, "one_piece", dry_run=False, force=True
+    )
     assert second.status == "success"
     assert second.updated_count == 1
     count2 = await SourceRunsRepo(sqlite_session).count_cards_by_source("optcgapi")
@@ -785,7 +823,9 @@ async def test_full_import_upserts_without_duplicates(sqlite_session: object) ->
 @pytest.mark.asyncio
 @respx.mock
 async def test_source_run_records_failure(sqlite_session: object) -> None:
-    respx.get("https://api.pokemontcg.io/v2/cards").mock(return_value=Response(500, json={"error": "fail"}))
+    respx.get("https://api.pokemontcg.io/v2/cards").mock(
+        return_value=Response(500, json={"error": "fail"})
+    )
     result = await start_full_catalogue_import(sqlite_session, "pokemon", dry_run=False, force=True)
     assert result.status == "failed"
     run_obj = await SourceRunsRepo(sqlite_session).get(uuid.UUID(result.source_run_id))
@@ -809,16 +849,24 @@ async def test_card_search_paginates(api_client: AsyncClient, sqlite_session: ob
             )
         )
     await sqlite_session.commit()
-    page1 = await api_client.get("/v1/cards/search", params={"game": "pokemon", "limit": 2, "offset": 0})
-    page2 = await api_client.get("/v1/cards/search", params={"game": "pokemon", "limit": 2, "offset": 2})
+    page1 = await api_client.get(
+        "/v1/cards/search", params={"game": "pokemon", "limit": 2, "offset": 0}
+    )
+    page2 = await api_client.get(
+        "/v1/cards/search", params={"game": "pokemon", "limit": 2, "offset": 2}
+    )
     assert page1.status_code == 200 and len(page1.json()) == 2
     assert page2.status_code == 200 and len(page2.json()) == 1
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_import_route_admin_ok(api_client: AsyncClient, admin_headers: dict[str, str]) -> None:
-    respx.get("https://api.pokemontcg.io/v2/cards").mock(return_value=Response(200, json=POKEMON_PAGE))
+async def test_import_route_admin_ok(
+    api_client: AsyncClient, admin_headers: dict[str, str]
+) -> None:
+    respx.get("https://api.pokemontcg.io/v2/cards").mock(
+        return_value=Response(200, json=POKEMON_PAGE)
+    )
     r = await api_client.post(
         "/v1/admin/sources/import/pokemon",
         params={"dry_run": "true"},

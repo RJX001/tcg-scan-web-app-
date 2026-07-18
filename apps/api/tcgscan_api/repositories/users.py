@@ -118,14 +118,10 @@ class UsersRepo:
         linkable = [user for user in matches if user.supabase_user_id is None]
         if linkable:
             if len(linkable) > 1:
-                log.warning(
-                    "users.multiple_linkable_email_rows", email=email, count=len(linkable)
-                )
+                log.warning("users.multiple_linkable_email_rows", email=email, count=len(linkable))
             return select_canonical_user(linkable)
 
-        raise ValueError(
-            "Account email is linked to another sign-in identity. Contact support."
-        )
+        raise ValueError("Account email is linked to another sign-in identity. Contact support.")
 
     async def _attach_supabase_id(self, user: User, supabase_user_id: str) -> User:
         """Point ``user`` at ``supabase_user_id``, freeing any other row that held it."""
@@ -162,11 +158,7 @@ class UsersRepo:
         owner_emails = {CANONICAL_OWNER_EMAIL.lower()}
         if settings.owner_email:
             owner_emails.add(settings.owner_email.lower())
-        if (
-            user.email
-            and user.email.lower() in owner_emails
-            and user.role != UserRole.owner
-        ):
+        if user.email and user.email.lower() in owner_emails and user.role != UserRole.owner:
             user.role = UserRole.owner
             await self._session.commit()
             await self._session.refresh(user)
@@ -183,8 +175,7 @@ class UsersRepo:
                 if matches:
                     canonical = select_canonical_user(matches)
                     if canonical.id != existing.id and (
-                        _role_rank(canonical) > _role_rank(existing)
-                        or _has_billing_data(canonical)
+                        _role_rank(canonical) > _role_rank(existing) or _has_billing_data(canonical)
                     ):
                         attached = await self._attach_supabase_id(canonical, supabase_user_id)
                         if not attached.email:

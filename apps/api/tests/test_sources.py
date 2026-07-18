@@ -28,8 +28,16 @@ YGOPRO_SAMPLE = {
             "level": 7,
             "atk": 2500,
             "def": 2100,
-            "card_sets": [{"set_name": "Legend of Blue Eyes White Dragon", "set_code": "LOB-EN005", "set_rarity": "Ultra Rare"}],
-            "card_images": [{"image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg"}],
+            "card_sets": [
+                {
+                    "set_name": "Legend of Blue Eyes White Dragon",
+                    "set_code": "LOB-EN005",
+                    "set_rarity": "Ultra Rare",
+                }
+            ],
+            "card_images": [
+                {"image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg"}
+            ],
             "card_prices": [{"tcgplayer_price": "0.27"}],
         }
     ]
@@ -57,9 +65,13 @@ OPTCG_CARD = [
 
 
 def _mock_one_piece_endpoints_promo_404() -> None:
-    respx.get("https://optcgapi.com/api/allSetCards/").mock(return_value=Response(200, json=[OPTCG_CARD[0]]))
+    respx.get("https://optcgapi.com/api/allSetCards/").mock(
+        return_value=Response(200, json=[OPTCG_CARD[0]])
+    )
     respx.get("https://optcgapi.com/api/allSTCards/").mock(return_value=Response(200, json=[]))
-    respx.get("https://optcgapi.com/api/allPromoCards/").mock(return_value=Response(404, json={"detail": "Not found"}))
+    respx.get("https://optcgapi.com/api/allPromoCards/").mock(
+        return_value=Response(404, json={"detail": "Not found"})
+    )
     respx.get("https://optcgapi.com/api/allDonCards/").mock(return_value=Response(200, json=[]))
 
 
@@ -83,7 +95,12 @@ async def admin_headers(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
     return {"X-Dev-User-Id": "admin-user"}
 
@@ -108,7 +125,9 @@ def test_one_piece_normalize_maps_fields() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_ygopro_diagnostic_success(admin_headers: dict[str, str], api_client: AsyncClient) -> None:
+async def test_ygopro_diagnostic_success(
+    admin_headers: dict[str, str], api_client: AsyncClient
+) -> None:
     respx.get("https://db.ygoprodeck.com/api/v7/cardinfo.php").mock(
         return_value=Response(200, json=YGOPRO_SAMPLE)
     )
@@ -124,9 +143,13 @@ async def test_ygopro_diagnostic_success(admin_headers: dict[str, str], api_clie
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_one_piece_diagnostic_success(admin_headers: dict[str, str], api_client: AsyncClient) -> None:
+async def test_one_piece_diagnostic_success(
+    admin_headers: dict[str, str], api_client: AsyncClient
+) -> None:
     respx.get("https://optcgapi.com/api/allSets/").mock(return_value=Response(200, json=OPTCG_SETS))
-    respx.get("https://optcgapi.com/api/sets/card/OP01-077/").mock(return_value=Response(200, json=OPTCG_CARD))
+    respx.get("https://optcgapi.com/api/sets/card/OP01-077/").mock(
+        return_value=Response(200, json=OPTCG_CARD)
+    )
     r = await api_client.get("/v1/admin/sources/test/one-piece", headers=admin_headers)
     assert r.status_code == 200
     body = r.json()
@@ -142,11 +165,16 @@ async def test_dragon_ball_fusion_world_not_implemented(
     admin_headers: dict[str, str],
     api_client: AsyncClient,
 ) -> None:
-    base = "https://www.dbs-cardgame.com/fw/en/cardlist/"
     respx.get(url__regex=r".*dbs-cardgame\.com.*").mock(
-        return_value=Response(200, text="<html><title>Fusion World</title></html>", headers={"content-type": "text/html"})
+        return_value=Response(
+            200,
+            text="<html><title>Fusion World</title></html>",
+            headers={"content-type": "text/html"},
+        )
     )
-    r = await api_client.get("/v1/admin/sources/test/dragon-ball-fusion-world", headers=admin_headers)
+    r = await api_client.get(
+        "/v1/admin/sources/test/dragon-ball-fusion-world", headers=admin_headers
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["status"] in {"not_implemented", "partial", "failed"}
@@ -161,7 +189,9 @@ async def test_dragon_ball_masters_not_implemented(
     api_client: AsyncClient,
 ) -> None:
     respx.get(url__regex=r".*dbs-cardgame\.com.*").mock(
-        return_value=Response(200, text="<html><title>Masters</title></html>", headers={"content-type": "text/html"})
+        return_value=Response(
+            200, text="<html><title>Masters</title></html>", headers={"content-type": "text/html"}
+        )
     )
     r = await api_client.get("/v1/admin/sources/test/dragon-ball-masters", headers=admin_headers)
     assert r.status_code == 200
@@ -185,13 +215,22 @@ async def test_ygopro_failure_does_not_crash_status(
 
 
 @pytest.mark.asyncio
-async def test_sources_test_requires_admin(api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_sources_test_requires_admin(
+    api_client: AsyncClient, sqlite_session: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "plain-user", tier="free", role="user"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "plain-user",
+            tier="free",
+            role="user",
+        ),
     )
-    r = await api_client.get("/v1/admin/sources/test/ygopro", headers={"X-Dev-User-Id": "plain-user"})
+    r = await api_client.get(
+        "/v1/admin/sources/test/ygopro", headers={"X-Dev-User-Id": "plain-user"}
+    )
     assert r.status_code == 403
 
 

@@ -34,7 +34,12 @@ async def test_sources_status_forbidden_for_user(
     user = await _make_user(sqlite_session, supabase_user_id="plain-user", role=UserRole.user)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "plain-user", tier="free", role="user"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "plain-user",
+            tier="free",
+            role="user",
+        ),
     )
     r = await api_client.get("/v1/admin/sources/status", headers={"X-Dev-User-Id": "plain-user"})
     assert r.status_code == 403
@@ -49,7 +54,12 @@ async def test_sources_status_ok_for_admin(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
     r = await api_client.get("/v1/admin/sources/status", headers={"X-Dev-User-Id": "admin-user"})
     assert r.status_code == 200
@@ -71,7 +81,12 @@ async def test_sources_status_ok_when_catalog_stats_fail(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
 
     async def _boom(_session: object) -> dict[str, object]:
@@ -98,7 +113,12 @@ async def test_sources_status_ok_when_ebay_stats_fail(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
 
     async def _boom(_session: object) -> dict[str, object]:
@@ -126,7 +146,12 @@ async def test_sources_status_empty_source_runs(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
     r = await api_client.get("/v1/admin/sources/status", headers={"X-Dev-User-Id": "admin-user"})
     assert r.status_code == 200
@@ -134,6 +159,8 @@ async def test_sources_status_empty_source_runs(
     for row in body.get("catalog_stats", []):
         assert row["last_success_at"] is None
         assert row["card_count"] == 0
+
+
 @pytest.mark.asyncio
 async def test_sources_test_reddit_not_implemented(
     api_client: AsyncClient,
@@ -143,9 +170,16 @@ async def test_sources_test_reddit_not_implemented(
     user = await _make_user(sqlite_session, supabase_user_id="admin-user", role=UserRole.admin)
     _patch_auth(
         monkeypatch,
-        AuthUser(id=user.id, supabase_user_id=user.supabase_user_id or "admin-user", tier="free", role="admin"),
+        AuthUser(
+            id=user.id,
+            supabase_user_id=user.supabase_user_id or "admin-user",
+            tier="free",
+            role="admin",
+        ),
     )
-    r = await api_client.get("/v1/admin/sources/test/reddit", headers={"X-Dev-User-Id": "admin-user"})
+    r = await api_client.get(
+        "/v1/admin/sources/test/reddit", headers={"X-Dev-User-Id": "admin-user"}
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "not_implemented"

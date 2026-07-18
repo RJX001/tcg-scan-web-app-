@@ -11,9 +11,7 @@ from tcgscan_api.config import get_settings
 
 log = structlog.get_logger()
 
-DEFAULT_ENDPOINT_URL = (
-    "https://tcg-scan-web-app-production.up.railway.app/v1/ebay/account-deletion"
-)
+DEFAULT_ENDPOINT_URL = "https://tcg-scan-web-app-production.up.railway.app/v1/ebay/account-deletion"
 
 
 def account_deletion_endpoint_url() -> str:
@@ -27,7 +25,9 @@ def account_deletion_verification_token() -> str | None:
     return None
 
 
-def compute_challenge_response(challenge_code: str, verification_token: str, endpoint_url: str) -> str:
+def compute_challenge_response(
+    challenge_code: str, verification_token: str, endpoint_url: str
+) -> str:
     payload = f"{challenge_code}{verification_token}{endpoint_url}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

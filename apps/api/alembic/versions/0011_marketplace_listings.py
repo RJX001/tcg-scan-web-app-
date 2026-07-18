@@ -38,7 +38,9 @@ def upgrade() -> None:
         sa.Column("affiliate_status", sa.String(32), nullable=True),
         sa.Column("grade", sa.String(32), nullable=True),
         sa.Column("raw_metadata", sa.JSON(), nullable=True),
-        sa.Column("card_id", sa.UUID(as_uuid=True), sa.ForeignKey("card_identity.id"), nullable=True),
+        sa.Column(
+            "card_id", sa.UUID(as_uuid=True), sa.ForeignKey("card_identity.id"), nullable=True
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

@@ -273,7 +273,9 @@ async def admin_ingest_dragon_ball_fw(
     limit: int = Query(default=100, ge=1, le=5000),
     dry_run: bool = Query(default=False),
 ) -> dict[str, Any]:
-    return await _run_ingest(request, session, "dragon_ball_fusion_world", limit=limit, dry_run=dry_run)
+    return await _run_ingest(
+        request, session, "dragon_ball_fusion_world", limit=limit, dry_run=dry_run
+    )
 
 
 @router.post("/sources/ingest/dragon-ball-masters")
@@ -354,7 +356,9 @@ async def admin_import_scryfall(
     dry_run: bool = Query(default=False),
     force: bool = Query(default=False),
 ) -> dict[str, Any]:
-    return await _run_import(request, session, "scryfall", limit=limit, dry_run=dry_run, force=force)
+    return await _run_import(
+        request, session, "scryfall", limit=limit, dry_run=dry_run, force=force
+    )
 
 
 @router.post("/sources/import/ygopro")
@@ -376,7 +380,9 @@ async def admin_import_one_piece(
     dry_run: bool = Query(default=False),
     force: bool = Query(default=False),
 ) -> dict[str, Any]:
-    return await _run_import(request, session, "one_piece", limit=limit, dry_run=dry_run, force=force)
+    return await _run_import(
+        request, session, "one_piece", limit=limit, dry_run=dry_run, force=force
+    )
 
 
 @router.post("/sources/ingest/ebay")

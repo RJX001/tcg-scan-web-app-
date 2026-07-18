@@ -459,7 +459,9 @@ async def seed_async() -> None:
         if dev_user.role != UserRole.owner:
             await UsersRepo(session).set_role(dev_user.id, UserRole.owner)
 
-    print(f"db:seed — inserted {len(CARDS)} catalog cards (Pokemon, MTG, Yu-Gi-Oh!, Lorcana, One Piece)")
+    print(
+        f"db:seed — inserted {len(CARDS)} catalog cards (Pokemon, MTG, Yu-Gi-Oh!, Lorcana, One Piece)"
+    )
     print("  dev-user tier: pro, role: owner (admin dashboard enabled)")
     print("  demo slugs:")
     for slug in DEMO_SLUGS:

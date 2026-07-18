@@ -110,7 +110,9 @@ async def _price_fields(session: AsyncSession, card_id: uuid.UUID) -> tuple[str,
     return "pending", None
 
 
-def _to_out(card: CardIdentity, *, price_status: str = "pending", current_value: float | None = None) -> CardOut:
+def _to_out(
+    card: CardIdentity, *, price_status: str = "pending", current_value: float | None = None
+) -> CardOut:
     return CardOut(
         id=str(card.id),
         slug=card_slug_from_identity(card),

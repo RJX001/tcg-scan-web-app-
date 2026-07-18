@@ -168,7 +168,9 @@ class MarketplaceListing(Base):
     item_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     seller_username: Mapped[str | None] = mapped_column(String(128))
     marketplace: Mapped[str] = mapped_column(String(32), nullable=False, default="EBAY_GB")
-    listing_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
+    listing_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", index=True
+    )
     affiliate_status: Mapped[str | None] = mapped_column(String(32))
     grade: Mapped[str | None] = mapped_column(String(32))
     raw_metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)

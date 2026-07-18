@@ -126,7 +126,11 @@ class OnePieceClient:
             if not optional:
                 raise
             skip_label = f"{label} ({exc.response.status_code})"
-            log.info("one_piece.optional_endpoint_skipped", endpoint=label, status=exc.response.status_code)
+            log.info(
+                "one_piece.optional_endpoint_skipped",
+                endpoint=label,
+                status=exc.response.status_code,
+            )
             return [], skip_label
         except httpx.HTTPError as exc:
             if not optional:
@@ -146,7 +150,9 @@ class OnePieceClient:
             (self.get_don_cards, "allDonCards", True),
         ]
         for fetch, label, optional in fetchers:
-            rows, skip_label = await self._fetch_endpoint_rows(fetch, label=label, optional=optional)
+            rows, skip_label = await self._fetch_endpoint_rows(
+                fetch, label=label, optional=optional
+            )
             if skip_label:
                 skipped_optional.append(skip_label)
                 continue
@@ -158,8 +164,12 @@ class OnePieceClient:
                 seen.add(sid)
                 cards.append(normalized)
                 if limit is not None and len(cards) >= limit:
-                    return OnePieceCatalogResult(cards=cards, skipped_optional_endpoints=tuple(skipped_optional))
-        return OnePieceCatalogResult(cards=cards, skipped_optional_endpoints=tuple(skipped_optional))
+                    return OnePieceCatalogResult(
+                        cards=cards, skipped_optional_endpoints=tuple(skipped_optional)
+                    )
+        return OnePieceCatalogResult(
+            cards=cards, skipped_optional_endpoints=tuple(skipped_optional)
+        )
 
     async def diagnostic(self) -> dict[str, Any]:
         try:

@@ -155,7 +155,9 @@ class SourceRunsRepo:
         except Exception as exc:  # pragma: no cover - rollback should not raise
             log.warning("source_runs.rollback_failed", error=str(exc))
 
-    async def last_success(self, source_key: str, *, run_type: str | None = None) -> SourceRun | None:
+    async def last_success(
+        self, source_key: str, *, run_type: str | None = None
+    ) -> SourceRun | None:
         stmt = select(SourceRun).where(
             SourceRun.source_key == source_key,
             SourceRun.status == SourceRunStatus.success,
@@ -171,7 +173,9 @@ class SourceRunsRepo:
                 return await self.last_success(source_key)
             return None
 
-    async def last_failed(self, source_key: str, *, run_type: str | None = None) -> SourceRun | None:
+    async def last_failed(
+        self, source_key: str, *, run_type: str | None = None
+    ) -> SourceRun | None:
         stmt = select(SourceRun).where(
             SourceRun.source_key == source_key,
             SourceRun.status == SourceRunStatus.failed,
@@ -262,11 +266,15 @@ class SourceRunsRepo:
             rows = list((await self._session.execute(stmt)).scalars().all())
         except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
             await self._rollback_on_db_error(exc)
-            log.warning("source_runs.fail_stale_runs_query_failed", source=source_key, error=str(exc))
+            log.warning(
+                "source_runs.fail_stale_runs_query_failed", source=source_key, error=str(exc)
+            )
             return 0
         except Exception as exc:  # pragma: no cover - unexpected driver error
             await self._safe_rollback()
-            log.warning("source_runs.fail_stale_runs_query_failed", source=source_key, error=str(exc))
+            log.warning(
+                "source_runs.fail_stale_runs_query_failed", source=source_key, error=str(exc)
+            )
             return 0
 
         now = datetime.now()
@@ -276,7 +284,9 @@ class SourceRunsRepo:
                 if not self._is_stale(run.started_at, older_than_seconds):
                     continue
                 run.status = SourceRunStatus.failed
-                cursor = self._preserved_cursor(run.error_message) if preserve_batch_cursor else None
+                cursor = (
+                    self._preserved_cursor(run.error_message) if preserve_batch_cursor else None
+                )
                 run.error_message = (
                     f"{error_message} {cursor}".strip() if cursor else error_message
                 )[:1024]
@@ -295,11 +305,15 @@ class SourceRunsRepo:
             await self._session.commit()
         except (ProgrammingError, DBAPIError, SQLAlchemyError) as exc:
             await self._rollback_on_db_error(exc)
-            log.warning("source_runs.fail_stale_runs_commit_failed", source=source_key, error=str(exc))
+            log.warning(
+                "source_runs.fail_stale_runs_commit_failed", source=source_key, error=str(exc)
+            )
             return 0
         except Exception as exc:  # pragma: no cover - unexpected driver error
             await self._safe_rollback()
-            log.warning("source_runs.fail_stale_runs_commit_failed", source=source_key, error=str(exc))
+            log.warning(
+                "source_runs.fail_stale_runs_commit_failed", source=source_key, error=str(exc)
+            )
             return 0
         return reclaimed
 

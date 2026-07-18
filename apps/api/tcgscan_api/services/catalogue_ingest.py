@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -77,7 +76,11 @@ async def _fetch_normalized(
         try:
             diag = await fw_client.diagnostic()
             if diag.get("status") not in {"success", "partial"}:
-                return [], str(diag.get("message") or "Bandai Fusion World adapter not implemented"), None
+                return (
+                    [],
+                    str(diag.get("message") or "Bandai Fusion World adapter not implemented"),
+                    None,
+                )
             return [], "No catalogue rows available yet for Bandai Fusion World", None
         finally:
             await fw_client.aclose()
@@ -87,7 +90,11 @@ async def _fetch_normalized(
         try:
             diag = await masters_client.diagnostic()
             if diag.get("status") not in {"success", "partial"}:
-                return [], str(diag.get("message") or "Bandai Masters adapter not implemented"), None
+                return (
+                    [],
+                    str(diag.get("message") or "Bandai Masters adapter not implemented"),
+                    None,
+                )
             return [], "No catalogue rows available yet for Bandai Masters", None
         finally:
             await masters_client.aclose()
@@ -123,7 +130,9 @@ async def run_catalogue_ingest(
     optional_skipped: list[str] | None = None
 
     try:
-        normalized, skip_message, optional_skipped = await _fetch_normalized(source_key, limit=limit)
+        normalized, skip_message, optional_skipped = await _fetch_normalized(
+            source_key, limit=limit
+        )
         if skip_message and not normalized:
             finished = await runs.finish(
                 run.id,

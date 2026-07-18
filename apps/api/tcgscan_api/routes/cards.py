@@ -21,7 +21,6 @@ from tcgscan_api.services.cards import (
     CompSummaryByGrade,
     ListingOut,
     SourcePrices,
-    get_card,
     get_card_by_slug,
     get_card_detail,
     get_chart,
@@ -79,7 +78,9 @@ async def card_by_slug(slug: str, session: AsyncSession = Depends(get_session)) 
 
 
 @router.get("/{card_id}", response_model=CardDetailOut)
-async def card_detail(card_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> CardDetailOut:
+async def card_detail(
+    card_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> CardDetailOut:
     key = f"cards:detail:{card_id}"
     cached = await cache_get(key)
     if cached:
