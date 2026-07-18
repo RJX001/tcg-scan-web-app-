@@ -1,6 +1,18 @@
 # API service only.
 # Config-as-code ALWAYS overrides the Railway dashboard. Do not point the Alloy
 # service at this file — use /infra/alloy/railway.toml instead.
+#
+# Dashboard (API service): enable "Wait for CI" so a failing GitHub Actions
+# check (CI / ci-ok — e.g. ruff/mypy) SKIPS the deploy instead of shipping.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "apps/api/Dockerfile"
+# Only redeploy when API (or packages baked into the API image) change.
+watchPatterns = [
+  "apps/api/**",
+  "packages/agents/**",
+  "packages/sdk-py/**",
+  "apps/ml/**",
+  "uv.lock",
+  "pyproject.toml",
+]

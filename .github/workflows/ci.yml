@@ -6,7 +6,38 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      js: ${{ steps.filter.outputs.js }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            js:
+              - 'apps/web/**'
+              - 'packages/ui/**'
+              - 'packages/sdk-ts/**'
+              - 'packages/schema/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'turbo.json'
+              - 'vercel.json'
+            python:
+              - 'apps/api/**'
+              - 'apps/worker/**'
+              - 'apps/ml/**'
+              - 'packages/agents/**'
+              - 'packages/sdk-py/**'
+              - 'uv.lock'
+              - 'pyproject.toml'
+
   js:
+    needs: changes
+    if: needs.changes.outputs.js == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,19 +52,56 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm schema:build
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
 
   python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-packages
-      - run: uv run ruff check apps/api apps/worker apps/ml packages/agents packages/sdk-py
-      - run: uv run --directory apps/api mypy tcgscan_api
-      - run: uv run --directory apps/worker mypy tcgscan_worker
-      - run: uv run --directory apps/ml mypy tcgscan_ml
-      - run: uv run --directory packages/agents mypy tcgscan_agents
-      - run: uv run pytest apps/api/tests apps/worker/tests apps/ml/tests packages/agents/tests packages/sdk-py/tests
+      # Non-zero exit fails this job → CI workflow fails → Railway Wait for CI skips API deploy.
+      - name: Lint (ruff)
+        run: uv run ruff check apps/api apps/worker apps/ml packages/agents packages/sdk-py
+      - name: Typecheck (mypy)
+        run: |
+          uv run --directory apps/api mypy tcgscan_api
+          uv run --directory apps/worker mypy tcgscan_worker
+          uv run --directory apps/ml mypy tcgscan_ml
+          uv run --directory packages/agents mypy tcgscan_agents
+      - name: Test
+        run: uv run pytest apps/api/tests apps/worker/tests apps/ml/tests packages/agents/tests packages/sdk-py/tests
+
+  # Always reports a check conclusion. Required for Railway "Wait for CI" when
+  # js/python jobs are path-skipped. Fails if a required job failed.
+  ci-ok:
+    needs: [changes, js, python]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify CI outcome
+        run: |
+          js="${{ needs.changes.outputs.js }}"
+          py="${{ needs.changes.outputs.python }}"
+          js_result="${{ needs.js.result }}"
+          py_result="${{ needs.python.result }}"
+
+          if [[ "$js" == "true" && "$js_result" != "success" ]]; then
+            echo "JS job required but result=$js_result"
+            exit 1
+          fi
+          if [[ "$py" == "true" && "$py_result" != "success" ]]; then
+            echo "Python job required but result=$py_result"
+            exit 1
+          fi
+          if [[ "$js" != "true" && "$py" != "true" ]]; then
+            echo "No JS/Python paths changed — CI skipped intentionally"
+          fi
+          echo "CI OK"
