@@ -1,5 +1,9 @@
 # Supabase Auth Migration — Clerk Audit
 
+> **Historical.** Migration is complete; Clerk is removed from application code.
+> For current auth behaviour see `AGENTS.md`, `apps/api/tcgscan_api/middleware/auth.py`, and `docs/CLERK_REMOVAL_AND_SUPABASE_AUTH_REPORT.md`.
+> Do not treat checklist items below as open work unless re-verified.
+
 Audit date: 2026-06-15. Branch: `supabase-auth-migration`.
 
 ## Frontend (`apps/web`)

@@ -16,7 +16,7 @@ Read AGENTS.md and docs/TCG_Scan_Phase1.md §3 (Architecture) and §12.2.
 
 Initialise the Turborepo monorepo:
 - Root: pnpm-workspace.yaml, turbo.json, .nvmrc (node 20), .python-version (3.12), .editorconfig, .gitignore, LICENSE (MIT).
-- apps/web — Next.js 15 App Router + TS + Tailwind + shadcn/ui + ESLint + Vitest + Playwright.
+- apps/web — Next.js 15 App Router + TS + Tailwind + shadcn/ui + ESLint + Vitest (Playwright e2e is a target, not required for bootstrap).
 - apps/api — FastAPI + Pydantic v2 + uv-managed + ruff + mypy --strict + pytest + pytest-asyncio.
 - apps/worker — Temporal Python SDK skeleton + ruff + mypy + pytest.
 - apps/ml — Modal stub with app.py per model (detect, embed, ocr, grade) and a contracts.md.

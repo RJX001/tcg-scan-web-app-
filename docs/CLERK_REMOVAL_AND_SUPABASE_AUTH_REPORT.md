@@ -1,5 +1,7 @@
 # Clerk Removal and Supabase Auth Report
 
+> **Canonical post-migration auth report.** Application code uses Supabase Auth only. Pair with root `AGENTS.md` for day-to-day conventions.
+
 Branch: `supabase-auth-migration`  
 Date: 2026-06-15
 

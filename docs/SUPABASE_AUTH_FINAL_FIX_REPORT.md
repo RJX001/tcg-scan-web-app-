@@ -1,5 +1,7 @@
 # Supabase Auth Final Fix Report
 
+> **Historical.** Cookie/session fixes from this report are in the tree. Prefer current `apps/web` middleware + `AGENTS.md` for behaviour.
+
 Date: 2026-06-15  
 Scope: Auth only — no Stripe, API features, styling, or unrelated pages.
 

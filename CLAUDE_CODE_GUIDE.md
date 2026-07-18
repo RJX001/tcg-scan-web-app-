@@ -1,4 +1,12 @@
-# Running TCG Scan Phase 1 with Claude Code
+# OBSOLETE — DO NOT USE
+
+> This guide targets an abandoned `backend/` + Celery + Poetry scaffold and Sprint 1 paths that **do not exist** in the current monorepo.
+>
+> Use **`AGENTS.md`**, **`CLAUDE.md`**, and **`README.md`** for setup. Product intent: **`docs/TCG_Scan_Phase1.md`**.
+
+---
+
+# Running TCG Scan Phase 1 with Claude Code (ARCHIVED)
 
 ## Step 1 — Install Claude Code
 

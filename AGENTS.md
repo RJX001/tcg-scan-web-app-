@@ -50,16 +50,17 @@ tcg-scan/
 | Web framework | Next.js 15 App Router + TS |
 | UI | Tailwind + shadcn/ui + lucide-react + Recharts |
 | Backend | FastAPI + Pydantic v2 |
-| OLTP | Postgres 16 via Supabase (+ pgvector) |
+| OLTP | Postgres 16 (+ pgvector) — local Docker / Railway |
 | Vector DB (images) | Qdrant |
-| Cache / queue | Redis (Upstash) |
-| Workflows | Temporal Cloud |
-| ML serving | Modal.com (GPU pay-per-second) |
-| Object storage | Cloudflare R2 |
-| Auth | Clerk |
+| Cache / queue | Redis (Upstash or local) |
+| Workflows | Temporal (Cloud or local compose; cron CLI also supported) |
+| ML serving | Modal.com (GPU pay-per-second) — stubs until weights deployed |
+| Object storage | Cloudflare R2 (planned; not required for local demo) |
+| Auth | **Supabase Auth** (JWT). Clerk removed. |
 | Payments | Stripe |
-| Agents | LangGraph + Claude (Haiku 4.5 default, Sonnet 4.6 for synthesis) |
-| Observability | OpenTelemetry → Grafana Cloud, LangSmith, Sentry |
+| Agents | LangGraph graphs (heuristics today; Claude when `ANTHROPIC_API_KEY` wired) |
+| Observability | OpenTelemetry → Grafana Cloud, LangSmith, Sentry (hooks; keys pending) |
+| Product brand | UI ships as **TCG Chart**; docs/package name **TCG Scan** |
 
 ---
 
@@ -85,16 +86,17 @@ pnpm test               # unit + integration (turbo, cached)
 pnpm lint               # eslint + ruff + mypy
 pnpm typecheck          # tsc + mypy strict
 pnpm build              # production builds
-pnpm sdk:generate       # regenerate packages/sdk-ts from apps/api OpenAPI
+pnpm sdk:generate       # intended OpenAPI regen — currently a placeholder; sdk-ts is hand-maintained
 pnpm eval               # apps/ml eval harness
+pnpm db:demo            # migrate + seed + stub-embed catalogs into Qdrant
 ```
 
 ### Things that touch real services
 
 Never run these without explicit user approval in the chat:
-- `pnpm worker ingest:*` against production credentials
+- `pnpm worker ingest:*` / `pnpm ingest:*` against production credentials
 - `modal deploy` to the prod profile
-- any `stripe`, `clerk`, `temporal` CLI command pointing at prod
+- any `stripe` or `temporal` CLI command pointing at prod
 - any DB migration on a non-local DB
 
 ---
@@ -105,9 +107,9 @@ Never run these without explicit user approval in the chat:
 
 - Strict mode on. **No `any`** without a `// reason:` comment.
 - Prefer **Server Components**; mark Client Components explicitly with `"use client"` only when needed (state, browser APIs).
-- Data fetching: in Server Components use the generated `sdk-ts` client; in Client Components use React Query (`@tanstack/react-query`).
+- Data fetching: use `@tcgscan/sdk-ts` (Server Components and client). React Query is **not** wired yet — do not invent a second data layer without an ADR.
 - Routing: App Router only. No `pages/` dir. Use route groups + parallel routes for shared layouts.
-- Forms: `react-hook-form` + Zod resolver. Zod schemas live in `packages/schema`.
+- Forms: prefer `react-hook-form` + Zod when adding complex forms. Shared Zod scaffolds live in `packages/schema` (still thin; API Pydantic remains source of truth for many DTOs).
 - Errors: throw typed errors; never return error strings as data.
 - Components: prefer composition over props soup; one component per file; co-locate tests as `*.test.tsx`.
 - Styling: Tailwind utility classes; component variants via `cva` (class-variance-authority); design tokens via shadcn theme.
@@ -118,20 +120,20 @@ Never run these without explicit user approval in the chat:
 
 - Python 3.12. Managed by `uv`.
 - Formatter: `ruff format`. Linter: `ruff check`. Type checker: `mypy --strict`.
-- **Async-first**: FastAPI route handlers are `async def`. Use `asyncpg` / `httpx.AsyncClient`. No `requests`, no `psycopg2-binary`.
+- **Async-first**: FastAPI route handlers are `async def`. Use `asyncpg` / `httpx.AsyncClient`. No `requests` in app code. Prefer async DB access; `psycopg2-binary` may exist only for Alembic sync migrations.
 - All function signatures fully type-hinted. Pydantic v2 models for all DTOs.
-- Dependency injection via FastAPI `Depends()`. **No business logic in route handlers** — keep them thin; logic lives in `service/` modules.
+- Dependency injection via FastAPI `Depends()`. **No business logic in route handlers** — keep them thin; logic lives in `services/` modules.
 - Errors: raise typed exceptions (`AppError`, `NotFoundError`, …). A global FastAPI exception handler maps them to RFC 9457 problem-json responses.
 - Logging: `structlog` with JSON output. Never `print()`. Never log secrets, tokens, PII, or raw card images.
-- Tests: `pytest` + `pytest-asyncio` + `pytest-anyio`. Coverage gate: 80% on changed lines.
+- Tests: `pytest` + `pytest-asyncio` + `pytest-anyio`. Aim for strong coverage on changed lines; CI does **not** currently enforce an 80% gate.
 - DB access: SQLAlchemy 2.x async + Alembic migrations. Never raw SQL in route handlers; use repository modules.
 - LLM calls: only through `packages/agents`. Never inline an Anthropic client in `apps/api` or `apps/web`.
 
 ### Shared schema (`packages/schema`)
 
-- JSON Schema is the source of truth. Generators emit Zod (TS) + Pydantic (Py).
-- When you change a schema, regenerate both clients (`pnpm schema:build`).
-- Breaking schema changes require an ADR in `docs/adr/`.
+- Target: JSON Schema as source of truth with Zod + Pydantic codegen.
+- Today: thin scaffolds; `pnpm schema:build` emits stub Zod. Most DTOs still live in `apps/api` Pydantic models and hand-written `packages/sdk-ts`.
+- Breaking schema changes that affect the public API require an ADR in `docs/adr/`.
 
 ---
 
@@ -150,10 +152,10 @@ Never run these without explicit user approval in the chat:
 
 - One FastAPI app, mounted at `/v1`. **Version everything.**
 - Endpoints: thin handlers → services → repositories → DB.
-- Auth: Clerk JWT verified via middleware → `request.state.user`. Anonymous endpoints are explicit (`@public_route`).
-- Rate limiting: Redis token bucket via middleware. Free tier limits enforced here, not in the web app.
-- Cache: read-through Redis cache for card detail (`cards:{id}`) with stampede protection. Invalidate on price-roll-up commit.
-- Long calls (scans, agentic flows) return a `202 Accepted` + job id and stream progress via SSE (`/v1/jobs/{id}/events`). Don't block requests > 5s.
+- Auth: Supabase JWT verified in `AuthMiddleware` → `request.state.user`. Protected handlers call `resolve_db_user` (opt-in). Public routes simply omit that call — there is no `@public_route` decorator today.
+- Rate limiting: Redis counters for scans / search IP limits. Free tier limits enforced here; web shows soft upgrade copy only.
+- Cache: Redis used for market/card caches and rate limits where wired.
+- Prefer short request handlers. Long ingest work belongs in the Temporal worker / CLI — not blocking the API. (A future jobs/SSE pattern is optional; not implemented yet.)
 
 ### `apps/worker`
 
@@ -179,15 +181,12 @@ Never run these without explicit user approval in the chat:
 
 ### `packages/agents`
 
-- Every agent = one LangGraph graph file (`packages/agents/<agent_name>/graph.py`) + a typed input/output Pydantic model + a `prompts.py`.
-- Default LLM: `claude-haiku-4-5-20251001`. Escalate to `claude-sonnet-4-6` ONLY in:
-  - `grade_roi_agent` synthesis step
-  - `digest_agent` final composition
-  - `anomaly_agent` judge step
-- **Hard token + cost budget per node**: `BudgetGuard(max_input_tokens=..., max_output_tokens=..., max_cost_usd=...)`. Exceed → raise + halt graph.
-- Tracing: every node wrapped with `@traced("agent.<name>.<node>")`; LangSmith project `tcg-scan-{env}`.
-- Tools (function-calling) are defined in `packages/agents/tools/` and reused across agents — never inline.
-- Determinism: if a node touches the LLM, snapshot inputs + outputs in tests under `tests/golden/`.
+- Every agent = one LangGraph graph under `packages/agents/tcgscan_agents/<agent_name>/` + typed I/O + prompts.
+- Graphs today (scan, pricing, grade_roi, monitor, digest) are mostly **rules / internal API wrappers**; Claude escalation is the intended next step when `ANTHROPIC_API_KEY` is wired — do not claim LLM behaviour that is not in code.
+- **Hard token + cost budget per node**: `BudgetGuard(...)`. Exceed → raise + halt graph.
+- Tracing: `@traced(...)` (structlog today; LangSmith when keys present).
+- Tools live in `packages/agents/tcgscan_agents/tools/` and are reused — never inline marketplace HTTP in the API.
+- When a node gains real LLM I/O, add golden snapshots under `tests/golden/`.
 
 ---
 
@@ -214,21 +213,21 @@ Never run these without explicit user approval in the chat:
 
 ## 7. Testing & quality gates
 
-- Unit: every service module / agent node / React hook has tests.
-- Integration: `apps/api` integration tests spin docker-compose; tagged `@integration`; run on PRs touching `apps/api` or `packages/schema`.
-- E2E: Playwright in `apps/web/e2e/` — at minimum, the scan → card detail → add to portfolio flow.
-- Eval (ML): runs on PRs touching `apps/ml` or `packages/agents`.
+**CI today (enforced):** `pnpm lint` + `pnpm typecheck` + `pnpm test` (Turbo), plus Python `ruff` / `mypy` / `pytest` on api, worker, ml, agents, sdk-py. See `.github/workflows/ci.yml`.
+
+**Not enforced yet (targets):** coverage %, Playwright e2e under `apps/web/e2e/`, docker-compose `@integration` suite, ML eval on every ML PR, OpenAPI↔sdk-ts drift checks.
+
+- Prefer unit tests next to changed modules; expand integration/e2e as you touch those surfaces.
 - CI is the source of truth — don't merge red. If CI is flaky, file an issue + fix; don't `git push -f`.
 
 ### Definition of Done (every PR)
 
 - [ ] Lint, typecheck, tests green
-- [ ] New code has tests; coverage on changed lines ≥ 80%
-- [ ] If schema changed: SDKs regenerated
-- [ ] If user-facing: screenshots / Loom in the PR
+- [ ] New code has tests for the behaviour you changed
+- [ ] If public API shapes changed: update `packages/sdk-ts` (hand-maintained until codegen) and `apps/api/docs/endpoints.md`
+- [ ] If user-facing: screenshots / Loom in the PR when UI changes meaningfully
 - [ ] If perf-sensitive: latency numbers in the PR
-- [ ] If ML-touching: eval report in the PR
-- [ ] If agent-touching: golden snapshots updated, LangSmith trace link in the PR
+- [ ] If ML-touching: run `pnpm eval` and note results when fixtures exist
 - [ ] CHANGELOG entry under "Unreleased"
 
 ---
@@ -267,13 +266,13 @@ See `.cursor/commands.md` for reusable command templates (`/scaffold-endpoint`, 
 
 ## 9. Security & privacy
 
-- Secrets in Vercel/Modal/Temporal/Clerk — never in git, never in logs.
+- Secrets in Vercel / Railway / Modal / Temporal / Supabase / Stripe dashboards — never in git, never in logs.
 - All inbound requests: input validation via Pydantic / Zod. Reject unknown fields.
-- All outbound HTTP: timeouts, retries with jitter, circuit breaker.
-- PII: user emails, IPs, card photos. Encrypt at rest (Postgres + R2 SSE). Don't ship PII to LLMs unless the user is in scope and we have consent.
+- All outbound HTTP: timeouts, retries with jitter; prefer circuit breakers on worker clients (`ResilientClient`).
+- PII: user emails, IPs, card photos. Don't ship PII to LLMs unless the user is in scope and we have consent.
 - Stripe webhooks: verify signatures. Replay-safe (idempotency keys).
-- Clerk: never trust client-claimed user id; always read from verified JWT in middleware.
-- Dependency hygiene: `pnpm audit` + `uv pip audit` weekly via CI. CVEs ≥ 7.0 block merges to main.
+- Auth: never trust a client-claimed user id; always verify the Supabase JWT (or reject). Dev header auth is forbidden when `ENVIRONMENT=production`.
+- Dependency hygiene: run `pnpm audit` + `uv pip audit` regularly. CVEs ≥ 7.0 should block merges to main.
 
 ---
 
@@ -310,15 +309,19 @@ The full list lives in `.env.example`. Highlights every agent must respect:
 | `DATABASE_URL` | api, worker | Postgres, async driver |
 | `QDRANT_URL` / `QDRANT_API_KEY` | api, worker, ml | Qdrant Cloud or local |
 | `REDIS_URL` | api, worker | Upstash |
-| `R2_BUCKET` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | api, worker | Cloudflare R2 |
-| `CLERK_SECRET_KEY` | api | Server-side only |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | api | Server-side only |
-| `ANTHROPIC_API_KEY` | agents | Single point of LLM access |
-| `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` | ml (deploy) | CI only |
-| `TEMPORAL_ADDRESS` / `TEMPORAL_NAMESPACE` | worker | |
-| `EBAY_APP_ID` / `EBAY_CERT_ID` / `EBAY_DEV_ID` | worker | Browse + Insights |
-| `TCG_API_KEY` | worker | tcgapi.dev or TCGAPIs.com |
-| `APIFY_TOKEN` | worker | Cardmarket scrapers |
+| `R2_BUCKET` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | api, worker | Cloudflare R2 (optional for local) |
+| `SUPABASE_URL` / `SUPABASE_JWT_SECRET` or `SUPABASE_JWKS_URL` | api | JWT verify (required in production) |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | web | Browser/SSR Supabase client |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRO_PRICE_ID` | api | Billing |
+| `ANTHROPIC_API_KEY` | agents | LLM access when agents escalate to Claude |
+| `MODAL_*_URL` / `MODAL_TOKEN_*` | api, ml | ML endpoints + deploy |
+| `TEMPORAL_ADDRESS` / `TEMPORAL_NAMESPACE` | worker | Local or Temporal Cloud |
+| `EBAY_APP_ID` / `EBAY_CERT_ID` or `EBAY_OAUTH_TOKEN` | worker, api | Browse API |
+| `EBAY_INSIGHTS_TOKEN` | worker | True sold comps (optional) |
+| `EBAY_AFFILIATE_TRACKING_ID` / `EBAY_AFFILIATE_CAMPAIGN_ID` | api | EPN link rewriting |
+| `TCG_API_KEY` | worker | tcgapi.dev |
+| `APIFY_TOKEN` | worker | Cardmarket dataset |
+| `DEV_AUTH_ENABLED` | api, web SDK | Local bypass via `X-Dev-User-Id` |
 | `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | agents | Observability |
 | `SENTRY_DSN_<APP>` | all | One per app |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | all | Grafana Cloud |

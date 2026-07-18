@@ -1,5 +1,5 @@
 # packages/sdk-ts — AGENTS.md
 
-Auto-generated TypeScript client from `apps/api` OpenAPI. Regenerate with `pnpm sdk:generate`.
+Hand-maintained TypeScript client for `apps/api` (`src/index.ts`).
 
-Do not hand-edit generated files under `src/generated/`.
+`pnpm sdk:generate` is a **placeholder** until OpenAPI codegen is wired. Until then, update `src/index.ts` in the same PR as API contract changes. There is no `src/generated/` tree yet.

@@ -5,6 +5,8 @@
 > 2. A future Claude / Cursor agent session — to use this as the source-of-truth context for scaffolding the repo and generating implementation prompts.
 >
 > **Style for the agent**: Treat every "Spec" block as a contract. Every "Cursor Prompt Seed" can be copy-pasted into Cursor / Claude Code to generate scaffolding. Do not invent features outside this document without flagging.
+>
+> **As-built corrections (July 2026):** Auth is **Supabase** (not Clerk). Background jobs are **Temporal** (or worker CLI cron) — not Celery. App OLTP is Postgres on Docker/Railway; Supabase is used for Auth only. UI brand ships as **TCG Chart**. For current maturity see `docs/PROJECT_TRACKING.md` and root `AGENTS.md`.
 
 ---
 
@@ -137,7 +139,7 @@ Phase 1 ships a **web app** that is fully usable on desktop and mobile browsers,
    └──────────────────────────────────────────────────────────┘
 
    ┌──────────────────────────────────────────────────────────┐
-   │  DATA INGESTION (Temporal or Celery + Redis)             │
+   │  DATA INGESTION (Temporal worker + Redis)                │
    │  - eBay Browse + Marketplace Insights workers            │
    │  - TCGPlayer (TCG API.dev / TCGAPIs.com)                 │
    │  - Cardmarket (Apify / Poketrace)                        │
@@ -155,12 +157,12 @@ Phase 1 ships a **web app** that is fully usable on desktop and mobile browsers,
 | Charts | **Recharts** + Lightweight Charts for price history | Industry standard |
 | Mobile (Phase 2) | **React Native + Expo** | Share TS types/SDK with web |
 | Backend | **FastAPI (Python 3.12) + Pydantic v2** | Plays perfectly with our ML stack; user is Python/ML native |
-| Auth | **Clerk** | Fast setup, supports orgs (for future dealer tier) |
-| DB (transactional) | **PostgreSQL 16 via Supabase** | Free tier good; pgvector built in |
+| Auth | **Supabase Auth** (as-built; plan originally said Clerk) | JWT sessions; org/dealer tier later |
+| DB (transactional) | **PostgreSQL 16** (+ pgvector) on Docker / Railway | Supabase used for Auth, not as the app OLTP host |
 | Vector DB (images) | **Qdrant Cloud** (free tier ~1GB) or self-hosted | Rust, fast, payload filtering, image-search proven at scale |
 | Cache / queue | **Redis (Upstash)** | Serverless, generous free tier |
 | Workflow / agents | **LangGraph + Claude (Sonnet 4.6 + Haiku 4.5)** | Production-grade agentic; LangSmith tracing |
-| Background workers | **Temporal Cloud** (preferred) or Celery | Durable executions for long price-watching workflows |
+| Background workers | **Temporal** (Cloud or local; CLI cron also supported) | Durable executions for long price-watching workflows |
 | ML serving | **Modal.com** (GPU pay-per-second) | No infra; deploys from Python; great DX |
 | Object storage | **Cloudflare R2** | S3-compatible, no egress fees |
 | Payments | **Stripe** | Standard |
@@ -175,7 +177,7 @@ tcg-scan/
 ├── apps/
 │   ├── web/                   # Next.js 15 app
 │   ├── api/                   # FastAPI service
-│   ├── worker/                # Temporal/Celery workers (Python)
+│   ├── worker/                # Temporal workers (Python)
 │   └── ml/                    # Modal deployments + model code
 ├── packages/
 │   ├── sdk-ts/                # Generated TS client from OpenAPI
@@ -373,7 +375,7 @@ Design principles:
 | 7 | Scan refinement | OCR re-rank + game-prior; condition grader v0 trained on bootstrap data |
 | 8 | Web app: search + card detail | Public, indexable, fast |
 | 9 | Web app: scan flow | Webcam + upload, result UI polished |
-| 10 | Auth + portfolio + alerts | Clerk + Stripe + Temporal scheduled jobs |
+| 10 | Auth + portfolio + alerts | Supabase + Stripe + Temporal scheduled jobs |
 | 11 | Agentic layer | LangGraph wiring up ScanAgent → PricingAgent → GradeROIAgent; DigestAgent stretch |
 | 12 | Hardening + private beta | Eval harness, observability dashboards, 25-user closed beta, bug burndown |
 
@@ -491,7 +493,7 @@ Build apps/web pages per §7:
 - /scan             upload + webcam capture (use getUserMedia, fallback to file input)
 - /card/[slug]      SSR card detail with price tiles, 90d chart, comps table
 - /search           text + image search
-- /portfolio        Clerk-gated dashboard
+- /portfolio        Auth-gated dashboard (Supabase session)
 - /alerts           CRUD
 - /account          Stripe customer portal
 Use packages/sdk-ts (generated from apps/api OpenAPI) for all API calls.

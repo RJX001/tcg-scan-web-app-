@@ -1,5 +1,7 @@
 # Supabase Auth Implementation Report
 
+> **Historical.** Migration complete. For current auth behaviour see `AGENTS.md` and `docs/CLERK_REMOVAL_AND_SUPABASE_AUTH_REPORT.md`.
+
 Branch: `supabase-auth-migration`  
 Date: 2026-06-15
 

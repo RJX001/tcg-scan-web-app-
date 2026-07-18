@@ -56,5 +56,5 @@ Two options, in order of preference:
 
 - The app talks **only** to `apps/api` (`/v1`) — same as the website. No marketplace
   calls from the client.
-- `localStorage` stays UI-preferences-only; auth tokens come from Clerk's SDK.
+- `localStorage` stays UI-preferences-only; auth sessions come from Supabase SSR cookies (not localStorage tokens).
 - Secrets never ship in the bundle; the web app holds no secrets today — keep it that way.
