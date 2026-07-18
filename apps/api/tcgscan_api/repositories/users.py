@@ -19,6 +19,45 @@ from tcgscan_api.db.models import (
 
 log = structlog.get_logger()
 
+# Canonical production owner after Clerk → Supabase migration. Prefer this row
+# (owner/admin + billing) when repairing a conflicting supabase_user_id link.
+CANONICAL_OWNER_EMAIL = "rajanpatel2001@hotmail.com"
+
+_ROLE_RANK = {
+    UserRole.owner: 4,
+    UserRole.admin_senior: 3,
+    UserRole.admin: 2,
+    UserRole.user: 1,
+}
+
+
+def _role_value(role: UserRole | str | None) -> str:
+    if role is None:
+        return UserRole.user.value
+    return role.value if isinstance(role, UserRole) else str(role)
+
+
+def _role_rank(user: User) -> int:
+    return _ROLE_RANK.get(UserRole(_role_value(user.role)), 0)
+
+
+def _has_billing_data(user: User) -> bool:
+    return bool(user.stripe_customer_id)
+
+
+def select_canonical_user(matches: list[User]) -> User:
+    """Pick the migrated owner/admin (or billed) row among email duplicates."""
+    return max(
+        matches,
+        key=lambda u: (
+            _role_rank(u),
+            1 if _has_billing_data(u) else 0,
+            1 if u.account_number else 0,
+            # Prefer older rows when ranks tie (original migrated account).
+            -(u.created_at.timestamp() if u.created_at else 0.0),
+        ),
+    )
+
 
 class UsersRepo:
     def __init__(self, session: AsyncSession) -> None:
@@ -45,6 +84,13 @@ class UsersRepo:
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
+    def _is_owner_migration_email(self, email: str) -> bool:
+        lowered = email.lower()
+        if lowered == CANONICAL_OWNER_EMAIL.lower():
+            return True
+        settings = get_settings()
+        return bool(settings.owner_email and lowered == settings.owner_email.lower())
+
     async def _linkable_user_by_email(self, email: str, supabase_user_id: str) -> User | None:
         matches = await self._users_by_email(email)
         if not matches:
@@ -54,22 +100,71 @@ class UsersRepo:
         for user in matches:
             if user.supabase_user_id == supabase_user_id:
                 return user
+
+        # Migrated owner/admin: always prefer the canonical row (role/billing),
+        # even when a blank duplicate has a null SID or the owner has a stale SID.
+        if self._is_owner_migration_email(email):
+            canonical = select_canonical_user(matches)
+            log.info(
+                "users.relink_owner_supabase_id",
+                email=email,
+                user_id=str(canonical.id),
+                previous_supabase_user_id=canonical.supabase_user_id,
+                supabase_user_id=supabase_user_id,
+                role=_role_value(canonical.role),
+            )
+            return canonical
+
         linkable = [user for user in matches if user.supabase_user_id is None]
-        if len(linkable) == 1:
-            return linkable[0]
-        if len(linkable) > 1:
-            log.warning("users.multiple_linkable_email_rows", email=email, count=len(linkable))
-            return linkable[0]
+        if linkable:
+            if len(linkable) > 1:
+                log.warning(
+                    "users.multiple_linkable_email_rows", email=email, count=len(linkable)
+                )
+            return select_canonical_user(linkable)
+
         raise ValueError(
             "Account email is linked to another sign-in identity. Contact support."
         )
 
+    async def _attach_supabase_id(self, user: User, supabase_user_id: str) -> User:
+        """Point ``user`` at ``supabase_user_id``, freeing any other row that held it."""
+        if user.supabase_user_id == supabase_user_id:
+            return user
+
+        stmt = select(User).where(User.supabase_user_id == supabase_user_id)
+        holder = (await self._session.execute(stmt)).scalar_one_or_none()
+        if holder is not None and holder.id != user.id:
+            # Empty duplicate created before the owner row was found — free the SID
+            # without deleting Stripe/account data on the canonical row.
+            if _role_rank(holder) <= _ROLE_RANK[UserRole.user] and not _has_billing_data(holder):
+                log.info(
+                    "users.clear_duplicate_supabase_id",
+                    duplicate_user_id=str(holder.id),
+                    supabase_user_id=supabase_user_id,
+                    canonical_user_id=str(user.id),
+                )
+                holder.supabase_user_id = None
+                # Flush clear first so the unique index never sees two SIDs at once.
+                await self._session.flush()
+            else:
+                raise ValueError(
+                    "Account email is linked to another sign-in identity. Contact support."
+                )
+
+        user.supabase_user_id = supabase_user_id
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
     async def _maybe_promote_owner(self, user: User) -> User:
         settings = get_settings()
+        owner_emails = {CANONICAL_OWNER_EMAIL.lower()}
+        if settings.owner_email:
+            owner_emails.add(settings.owner_email.lower())
         if (
-            settings.owner_email
-            and user.email
-            and user.email.lower() == settings.owner_email.lower()
+            user.email
+            and user.email.lower() in owner_emails
             and user.role != UserRole.owner
         ):
             user.role = UserRole.owner
@@ -81,6 +176,23 @@ class UsersRepo:
         stmt = select(User).where(User.supabase_user_id == supabase_user_id)
         existing = (await self._session.execute(stmt)).scalar_one_or_none()
         if existing:
+            # If this SID landed on a blank free row but the email belongs to the
+            # migrated owner/admin account, reclaim the SID onto that canonical row.
+            if email and self._is_owner_migration_email(email):
+                matches = await self._users_by_email(email)
+                if matches:
+                    canonical = select_canonical_user(matches)
+                    if canonical.id != existing.id and (
+                        _role_rank(canonical) > _role_rank(existing)
+                        or _has_billing_data(canonical)
+                    ):
+                        attached = await self._attach_supabase_id(canonical, supabase_user_id)
+                        if not attached.email:
+                            attached.email = email
+                            await self._session.commit()
+                            await self._session.refresh(attached)
+                        return await self._maybe_promote_owner(attached)
+
             changed = False
             if email and not existing.email:
                 existing.email = email
@@ -93,13 +205,12 @@ class UsersRepo:
         if email:
             linked = await self._linkable_user_by_email(email, supabase_user_id)
             if linked is not None:
-                if linked.supabase_user_id is None:
-                    linked.supabase_user_id = supabase_user_id
-                if not linked.email:
-                    linked.email = email
-                await self._session.commit()
-                await self._session.refresh(linked)
-                return await self._maybe_promote_owner(linked)
+                attached = await self._attach_supabase_id(linked, supabase_user_id)
+                if not attached.email:
+                    attached.email = email
+                    await self._session.commit()
+                    await self._session.refresh(attached)
+                return await self._maybe_promote_owner(attached)
 
         seq = await self._next_account_seq()
         user = User(
