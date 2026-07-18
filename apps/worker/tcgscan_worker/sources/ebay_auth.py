@@ -31,6 +31,7 @@ async def get_ebay_oauth_token() -> str:
     cert_id = os.getenv("EBAY_CERT_ID", "").strip()
     if not app_id or not cert_id:
         msg = "EBAY_OAUTH_TOKEN or EBAY_APP_ID+EBAY_CERT_ID required"
+        log.error("ebay.auth_failed", reason="missing_credentials")
         raise ValueError(msg)
 
     auth = base64.b64encode(f"{app_id}:{cert_id}".encode()).decode()
@@ -52,6 +53,7 @@ async def get_ebay_oauth_token() -> str:
     token = str(payload.get("access_token", ""))
     if not token:
         msg = "eBay OAuth response missing access_token"
+        log.error("ebay.auth_failed", reason="missing_access_token")
         raise ValueError(msg)
 
     expires_in = int(payload.get("expires_in", 7200))

@@ -126,7 +126,7 @@ class OnePieceClient:
             if not optional:
                 raise
             skip_label = f"{label} ({exc.response.status_code})"
-            log.info(
+            log.warning(
                 "one_piece.optional_endpoint_skipped",
                 endpoint=label,
                 status=exc.response.status_code,
@@ -136,7 +136,7 @@ class OnePieceClient:
             if not optional:
                 raise
             skip_label = f"{label} (unavailable)"
-            log.info("one_piece.optional_endpoint_skipped", endpoint=label, error=str(exc))
+            log.warning("one_piece.optional_endpoint_skipped", endpoint=label, error=str(exc))
             return [], skip_label
 
     async def iter_all_cards(self, *, limit: int | None = None) -> OnePieceCatalogResult:

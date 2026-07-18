@@ -67,6 +67,6 @@ async def to_usd(
     ).scalar_one_or_none()
     rate = row if row is not None else DEFAULT_RATES.get(cur)
     if rate is None:
-        log.warning("fx.missing_rate", currency=cur)
+        log.error("fx.missing_rate", currency=cur)
         return amount
     return (amount * Decimal(rate)).quantize(Decimal("0.01"))

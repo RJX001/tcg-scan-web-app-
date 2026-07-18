@@ -15,9 +15,11 @@ _graph = build_digest_graph().compile()
 
 async def run_daily_digests() -> int:
     sent = 0
+    users_total = 0
     async with session_scope() as session:
         stmt = select(User).where(User.tier == UserTier.pro)
         users = list((await session.execute(stmt)).scalars().all())
+        users_total = len(users)
         for user in users:
             from tcgscan_api.repositories.users import PortfolioRepo
 
@@ -32,10 +34,10 @@ async def run_daily_digests() -> int:
             if out is None:
                 continue
             sent += 1
-            log.info(
+            log.debug(
                 "digest.preview",
                 user_id=str(user.id),
                 subject=out.subject,
-                body=out.body[:120],
             )
+    log.info("digest.run.done", users=users_total, sent=sent)
     return sent

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+import structlog
 from langgraph.graph import END, StateGraph
 
 from tcgscan_agents.budget import BudgetGuard
 from tcgscan_agents.scan_agent.models import ScanAgentInput, ScanAgentOutput
 from tcgscan_agents.tools.pricing import fetch_comps_summary
 from tcgscan_agents.tracing import traced
+
+log = structlog.get_logger()
 
 
 class ScanState(TypedDict):
@@ -21,6 +24,7 @@ def match_node(state: ScanState) -> ScanState:
     budget = BudgetGuard(max_cost_usd=0.05)
     budget.record(input_tokens=50, output_tokens=20, cost_usd=0.002)
     # Production: call ML + Qdrant via apps/api run_scan
+    log.debug("scan_agent.stub_result")
     return {
         **state,
         "output": ScanAgentOutput(card_id=None, confidence=0.0),

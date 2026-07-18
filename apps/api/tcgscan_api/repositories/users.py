@@ -96,7 +96,11 @@ class UsersRepo:
         if not matches:
             return None
         if len(matches) > 1:
-            log.warning("users.duplicate_email", email=email, count=len(matches))
+            log.warning(
+                "users.duplicate_email",
+                user_ids=[str(user.id) for user in matches],
+                count=len(matches),
+            )
         for user in matches:
             if user.supabase_user_id == supabase_user_id:
                 return user
@@ -107,8 +111,8 @@ class UsersRepo:
             canonical = select_canonical_user(matches)
             log.info(
                 "users.relink_owner_supabase_id",
-                email=email,
                 user_id=str(canonical.id),
+                account_number=canonical.account_number,
                 previous_supabase_user_id=canonical.supabase_user_id,
                 supabase_user_id=supabase_user_id,
                 role=_role_value(canonical.role),
@@ -118,7 +122,11 @@ class UsersRepo:
         linkable = [user for user in matches if user.supabase_user_id is None]
         if linkable:
             if len(linkable) > 1:
-                log.warning("users.multiple_linkable_email_rows", email=email, count=len(linkable))
+                log.warning(
+                    "users.multiple_linkable_email_rows",
+                    user_ids=[str(user.id) for user in linkable],
+                    count=len(linkable),
+                )
             return select_canonical_user(linkable)
 
         raise ValueError("Account email is linked to another sign-in identity. Contact support.")

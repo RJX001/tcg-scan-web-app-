@@ -4,6 +4,7 @@
 
 ### Added
 
+- Log signal quality pass across api/worker/ml/agents (`sre.md`): first ERROR-level events for alertable failures (ML outage, Qdrant down, ingest job failures, retry exhaustion, circuit-breaker open, FX missing rate, embed degradation, worker connect failure, 5xx AppErrors, agent node failures); canonical retry logging (attempt WARNING with numbers → exhaustion ERROR) in both HTTP retry clients; Redis cache/rate-limit fail-open now visible at WARNING; per-item batch chatter demoted to DEBUG behind summary INFO counters; PII/token redaction (emails, `eias_token`, digest bodies, signed image URLs); worker exits non-zero when Temporal is unreachable
 - API observability, fully OTEL-native: custom scan-pipeline spans (`scan.run` + detect/embed_ocr_grade/ann_search/rerank/verdict stages) and ML client spans with stub/fallback/live mode, business metrics (`tcgscan.scan.duration`, `tcgscan.scan.stage.duration`, `tcgscan.scan.count`, `tcgscan.ml.requests`), SQLAlchemy + Redis auto-instrumentation, OTLP log export with structlog JSON output + trace correlation, and standard `OTEL_TRACES_SAMPLER` env-var support
 
 ### Removed

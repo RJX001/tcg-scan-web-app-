@@ -8,4 +8,6 @@ Given a user's portfolio card count and recent market movers (when available):
 - Mention one actionable opportunity (alert, grade, or hold)
 - Keep under 150 words. No hype. English only."""
 
-DIGEST_SUBJECT_PROMPT = """Write a short email subject line for a daily TCG portfolio brief (max 60 chars)."""
+DIGEST_SUBJECT_PROMPT = (
+    """Write a short email subject line for a daily TCG portfolio brief (max 60 chars)."""
+)

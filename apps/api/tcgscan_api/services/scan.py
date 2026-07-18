@@ -265,8 +265,8 @@ async def run_scan(payload: ScanInput) -> ScanResult:
                     _set_run_span_match_attrs(run_span, result.matches)
                     outcome = "cache_hit"
                     return result
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.warning("scan.cache_payload_invalid", key=key, error=str(exc))
 
             run_span.set_attribute("tcgscan.scan.cache_hit", False)
 
@@ -307,7 +307,7 @@ async def run_scan(payload: ScanInput) -> ScanResult:
                     except Exception as exc:
                         ann_span.record_exception(exc)
                         ann_span.set_attribute("tcgscan.scan.qdrant_unavailable", True)
-                        log.warning("scan.qdrant_unavailable", error=str(exc))
+                        log.error("scan.qdrant_unavailable", error=str(exc))
                         points = []
                     stage_s = time.perf_counter() - t2
                     stages["ann_search"] = stage_s * 1000
@@ -342,9 +342,12 @@ async def run_scan(payload: ScanInput) -> ScanResult:
                                 )
                                 if verdict is not None:
                                     condition = condition.model_copy(update={"verdict": verdict})
-                        except (ValueError, Exception) as exc:
+                        except ValueError as exc:
                             verdict_span.record_exception(exc)
                             log.warning("scan.verdict_skipped", error=str(exc))
+                        except Exception as exc:
+                            verdict_span.record_exception(exc)
+                            log.exception("scan.verdict_failed")
                         stage_s = time.perf_counter() - t4
                         _record_stage_duration(stage="verdict", duration_s=stage_s)
 

@@ -33,14 +33,14 @@ async def run_worker() -> None:
     address = os.getenv("TEMPORAL_ADDRESS", "localhost:7233")
     namespace = os.getenv("TEMPORAL_NAMESPACE", "default")
     if not address:
-        log.warning("worker.skip", reason="TEMPORAL_ADDRESS unset")
+        log.error("worker.skip", reason="TEMPORAL_ADDRESS unset")
         return
 
     try:
         client = await Client.connect(address, namespace=namespace)
     except Exception as exc:
-        log.warning("worker.connect_failed", error=str(exc), address=address)
-        return
+        log.error("worker.connect_failed", error=str(exc), address=address)
+        raise SystemExit(1) from exc
 
     worker = Worker(
         client,

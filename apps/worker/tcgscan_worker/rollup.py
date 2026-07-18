@@ -39,5 +39,5 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     cid = uuid.UUID(args.card_id) if args.card_id else None
     n = asyncio.run(rollup_all(card_id=cid))
-    print(f"rolled_up_rows={n}")
+    log.info("rollup.cli.done", rows=n)
     return 0

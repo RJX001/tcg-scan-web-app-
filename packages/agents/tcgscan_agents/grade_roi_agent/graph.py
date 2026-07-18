@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
 
+import structlog
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
 
 from tcgscan_agents.budget import BudgetGuard
 from tcgscan_agents.tools.pricing import _api_base
 from tcgscan_agents.tracing import traced
+
+log = structlog.get_logger()
 
 
 class GradeROIInput(BaseModel):
@@ -40,8 +43,8 @@ def rules_node(state: GradeROIState) -> GradeROIState:
             )
             if r.status_code == 200:
                 summary = r.json()
-    except httpx.HTTPError:
-        pass
+    except httpx.HTTPError as exc:
+        log.warning("grade_roi.comps_fetch_failed", error=str(exc))
     median_raw = summary.get("median_usd")
     cost = 25.0
     if not isinstance(median_raw, (int, float)):

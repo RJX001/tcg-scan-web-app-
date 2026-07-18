@@ -112,5 +112,5 @@ def main() -> int:
     import asyncio
 
     asyncio.run(main_async())
-    print("temporal schedules registered")
+    log.info("schedules.cli.done")
     return 0

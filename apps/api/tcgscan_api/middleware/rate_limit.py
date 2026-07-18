@@ -5,12 +5,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import redis.asyncio as redis
+import structlog
 from fastapi import HTTPException, Request
 
 from tcgscan_api.config import get_settings
 from tcgscan_api.db.session import get_sessionmaker
 from tcgscan_api.repositories.users import UsersRepo
 from tcgscan_api.db.models import UserTier
+
+log = structlog.get_logger()
 
 
 async def _redis() -> redis.Redis:
@@ -56,8 +59,8 @@ async def check_scan_rate_limit(request: Request) -> None:
             )
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("rate_limit.fail_open", scope="scan", error=str(exc))
 
 
 async def check_ip_rate_limit(
@@ -80,5 +83,5 @@ async def check_ip_rate_limit(
             raise HTTPException(status_code=429, detail="Too many requests. Try again shortly.")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("rate_limit.fail_open", scope="ip", error=str(exc))

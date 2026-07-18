@@ -54,13 +54,21 @@ class CircuitBreaker:
     _opened_at: float | None = None
 
     def record_success(self) -> None:
+        was_open = self._opened_at is not None
         self._failures = 0
         self._opened_at = None
+        if was_open:
+            log.info("http.circuit_closed")
 
     def record_failure(self) -> None:
         self._failures += 1
         if self._failures >= self.failure_threshold and self._opened_at is None:
             self._opened_at = time.monotonic()
+            log.error(
+                "http.circuit_open",
+                failures=self._failures,
+                cooldown_s=self.reset_after_s,
+            )
 
     def check(self) -> None:
         if self._opened_at is None:
@@ -68,7 +76,13 @@ class CircuitBreaker:
         if time.monotonic() - self._opened_at >= self.reset_after_s:
             self._failures = 0
             self._opened_at = None
+            log.info("http.circuit_closed")
             return
+        log.debug(
+            "http.circuit_reject",
+            failures=self._failures,
+            cooldown_s=self.reset_after_s,
+        )
         raise CircuitOpenError("circuit open")
 
 
@@ -123,7 +137,24 @@ class ResilientClient:
                     return payload if isinstance(payload, dict) else {"data": payload}
                 except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                     self._breaker.record_failure()
-                    log.warning("http.error", method=method, url=url, error=str(exc))
+                    attempt_number = attempt.retry_state.attempt_number
+                    if attempt_number < self._max_attempts:
+                        log.warning(
+                            "http.retry",
+                            method=method,
+                            url=url,
+                            attempt=attempt_number,
+                            max_attempts=self._max_attempts,
+                            error=str(exc),
+                        )
+                    else:
+                        log.error(
+                            "http.exhausted",
+                            method=method,
+                            url=url,
+                            attempts=self._max_attempts,
+                            error=str(exc),
+                        )
                     raise
 
         raise RuntimeError("unreachable")

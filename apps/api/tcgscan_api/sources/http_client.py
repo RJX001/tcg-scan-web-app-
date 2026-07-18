@@ -10,6 +10,7 @@ import httpx
 import structlog
 from tenacity import (
     AsyncRetrying,
+    RetryCallState,
     retry_if_exception,
     stop_after_attempt,
     wait_exponential_jitter,
@@ -24,6 +25,7 @@ DEFAULT_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "application/json",
 }
+_GET_JSON_MAX_ATTEMPTS = 4
 
 
 def _should_retry(exc: BaseException) -> bool:
@@ -96,16 +98,42 @@ class SourceHttpClient:
 
         await self._bucket.acquire()
         payload: Any = None
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(4),
-            wait=wait_exponential_jitter(initial=0.5, max=8.0),
-            retry=retry_if_exception(_should_retry),
-            reraise=True,
-        ):
-            with attempt:
-                resp = await self._client.get(path, params=params)
-                resp.raise_for_status()
-                payload = resp.json()
+        # Log path only (no query params — may contain API keys).
+        request_url = str(self._client.base_url.join(path))
+        max_attempts = _GET_JSON_MAX_ATTEMPTS
+
+        def _before_sleep(retry_state: RetryCallState) -> None:
+            outcome = retry_state.outcome
+            exc = outcome.exception() if outcome is not None else None
+            log.warning(
+                "source_http.retry",
+                url=request_url,
+                attempt=retry_state.attempt_number,
+                max_attempts=max_attempts,
+                error=str(exc) if exc is not None else "",
+            )
+
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(max_attempts),
+                wait=wait_exponential_jitter(initial=0.5, max=8.0),
+                retry=retry_if_exception(_should_retry),
+                before_sleep=_before_sleep,
+                reraise=True,
+            ):
+                with attempt:
+                    resp = await self._client.get(path, params=params)
+                    resp.raise_for_status()
+                    payload = resp.json()
+        except Exception as exc:
+            if _should_retry(exc):
+                log.error(
+                    "source_http.exhausted",
+                    url=request_url,
+                    attempts=max_attempts,
+                    error=str(exc),
+                )
+            raise
 
         if cache_key and payload is not None:
             await cache_set(cache_key, payload, ttl_s=cache_ttl_s)

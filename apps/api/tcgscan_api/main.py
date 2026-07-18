@@ -35,7 +35,7 @@ log = structlog.get_logger()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     cors_origins = cors_origins_from_settings()
-    log.info("Allowed CORS origins: %s", cors_origins)
+    log.info("api.cors_origins", origins=cors_origins)
     if settings.environment == "production" and not (
         settings.supabase_jwt_secret or settings.supabase_jwks_url
     ):
@@ -53,6 +53,13 @@ fastapi_app.add_middleware(AuthMiddleware)
 @fastapi_app.exception_handler(AppError)
 async def app_error_handler(_req: Request, exc: AppError) -> JSONResponse:
     """RFC 9457 problem-json mapping."""
+    if exc.status_code >= 500:
+        log.error(
+            "api.app_error",
+            code=exc.__class__.__name__,
+            status_code=exc.status_code,
+            message=exc.message,
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={

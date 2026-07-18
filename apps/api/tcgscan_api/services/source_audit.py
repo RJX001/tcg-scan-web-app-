@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import structlog
@@ -14,6 +14,10 @@ from tcgscan_api.sources.one_piece import OnePieceClient
 from tcgscan_api.sources.ygoprodeck import YgoProDeckClient
 
 log = structlog.get_logger()
+
+
+def _log_check_failed(provider: str, error: str) -> None:
+    log.warning("source_audit.check_failed", source=provider, error=error)
 
 
 def _env_set(name: str) -> bool:
@@ -267,10 +271,12 @@ async def test_ebay_connection() -> dict[str, Any]:
                 resp.raise_for_status()
                 token = str(resp.json().get("access_token", ""))
         if not token:
+            message = "OAuth succeeded but access_token missing"
+            _log_check_failed("ebay", message)
             return {
                 "status": "failed",
                 "provider": "ebay",
-                "message": "OAuth succeeded but access_token missing",
+                "message": message,
                 "ok": False,
             }
         marketplace = os.getenv("EBAY_MARKETPLACE_ID", "EBAY_GB")
@@ -293,7 +299,7 @@ async def test_ebay_connection() -> dict[str, Any]:
             "ok": True,
         }
     except Exception as exc:
-        log.warning("source_audit.ebay_test_failed", error=str(exc))
+        _log_check_failed("ebay", str(exc))
         return {"status": "failed", "provider": "ebay", "message": str(exc), "ok": False}
 
 
@@ -317,6 +323,7 @@ async def test_pokemon_connection() -> dict[str, Any]:
             "ok": True,
         }
     except Exception as exc:
+        _log_check_failed("pokemontcg", str(exc))
         return {
             "status": "failed",
             "provider": "pokemontcg",
@@ -342,13 +349,27 @@ async def test_scryfall_connection() -> dict[str, Any]:
             "ok": True,
         }
     except Exception as exc:
+        _log_check_failed("scryfall", str(exc))
         return {"status": "failed", "provider": "scryfall", "message": str(exc), "ok": False}
+
+
+async def _diagnostic_with_logging(
+    client: Any,
+    *,
+    default_provider: str,
+) -> dict[str, Any]:
+    result = cast(dict[str, Any], await client.diagnostic())
+    if result.get("status") == "failed":
+        provider = str(result.get("provider") or default_provider)
+        message = str(result.get("message") or "unknown")
+        _log_check_failed(provider, message)
+    return result
 
 
 async def test_ygopro_connection() -> dict[str, Any]:
     client = YgoProDeckClient()
     try:
-        return await client.diagnostic()
+        return await _diagnostic_with_logging(client, default_provider="ygoprodeck")
     finally:
         await client.aclose()
 
@@ -356,7 +377,7 @@ async def test_ygopro_connection() -> dict[str, Any]:
 async def test_one_piece_connection() -> dict[str, Any]:
     client = OnePieceClient()
     try:
-        return await client.diagnostic()
+        return await _diagnostic_with_logging(client, default_provider="optcgapi")
     finally:
         await client.aclose()
 
@@ -364,7 +385,7 @@ async def test_one_piece_connection() -> dict[str, Any]:
 async def test_dragon_ball_fusion_world_connection() -> dict[str, Any]:
     client = DragonBallFusionWorldClient()
     try:
-        return await client.diagnostic()
+        return await _diagnostic_with_logging(client, default_provider="dragon_ball_fusion_world")
     finally:
         await client.aclose()
 
@@ -372,7 +393,7 @@ async def test_dragon_ball_fusion_world_connection() -> dict[str, Any]:
 async def test_dragon_ball_masters_connection() -> dict[str, Any]:
     client = DragonBallMastersClient()
     try:
-        return await client.diagnostic()
+        return await _diagnostic_with_logging(client, default_provider="dragon_ball_masters")
     finally:
         await client.aclose()
 
@@ -421,10 +442,12 @@ async def test_cardmarket_connection() -> dict[str, Any]:
                 headers={"Authorization": f"Bearer {token}"},
             )
             if resp.status_code == 404:
+                message = f"Apify dataset not found: {dataset_id}"
+                _log_check_failed("cardmarket", message)
                 return {
                     "status": "failed",
                     "provider": "cardmarket",
-                    "message": f"Apify dataset not found: {dataset_id}",
+                    "message": message,
                     "dataset_id": dataset_id,
                     "ok": False,
                 }
@@ -439,6 +462,7 @@ async def test_cardmarket_connection() -> dict[str, Any]:
             "ok": True,
         }
     except Exception as exc:
+        _log_check_failed("cardmarket", str(exc))
         return {
             "status": "failed",
             "provider": "cardmarket",

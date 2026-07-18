@@ -37,20 +37,47 @@ class MLClient:
     def __init__(self, *, client: httpx.AsyncClient | None = None) -> None:
         self._client = client or httpx.AsyncClient(timeout=10.0)
         self._settings = get_settings()
+        self._call_error: str | None = None
 
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def _call(self, url: str | None, payload: dict[str, Any]) -> dict[str, Any] | None:
-        if not url:
-            return None
+    def _log_ml_error(self, endpoint: str, url: str, error: str) -> None:
+        log.error("ml.error", endpoint=endpoint, url=url, error=error)
+
+    def _log_unusable_payload(self, endpoint: str, url: str, out: dict[str, Any] | None) -> None:
+        if out is None:
+            return
+        if endpoint == "embed":
+            error = "invalid or missing embed vector"
+        elif endpoint == "grade":
+            error = "invalid or missing grade overall"
+        elif not out:
+            error = "empty response"
+        else:
+            error = "unusable response payload"
+        self._log_ml_error(endpoint, url, error)
+
+    def _log_fallback(
+        self, endpoint: str, url: str, out: dict[str, Any] | None, *, call_error: str | None
+    ) -> None:
+        if call_error:
+            self._log_ml_error(endpoint, url, call_error)
+        else:
+            self._log_unusable_payload(endpoint, url, out)
+
+    async def _call(self, url: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        self._call_error = None
         try:
             r = await self._client.post(url, json=payload)
             r.raise_for_status()
             data = r.json()
-            return data if isinstance(data, dict) else None
+            if not isinstance(data, dict):
+                self._call_error = "response is not a JSON object"
+                return None
+            return data
         except (httpx.HTTPError, ValueError) as exc:
-            log.warning("ml.error", url=url, error=str(exc))
+            self._call_error = str(exc)
             return None
 
     async def detect(self, image_b64: str) -> dict[str, Any]:
@@ -66,6 +93,7 @@ class MLClient:
                 span.set_attribute("tcgscan.ml.mode", "live")
                 ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "detect", "tcgscan.ml.mode": "live"})
                 return out
+            self._log_fallback("detect", url, out, call_error=self._call_error)
             span.set_attribute("tcgscan.ml.mode", "fallback")
             ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "detect", "tcgscan.ml.mode": "fallback"})
             return {"bboxes": [{"x": 0, "y": 0, "w": 1.0, "h": 1.0, "angle": 0.0}]}
@@ -87,6 +115,7 @@ class MLClient:
                 span.set_attribute("tcgscan.ml.mode", "live")
                 ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "embed", "tcgscan.ml.mode": "live"})
                 return [float(x) for x in out["vector"]]
+            self._log_fallback("embed", url, out, call_error=self._call_error)
             span.set_attribute("tcgscan.ml.mode", "fallback")
             ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "embed", "tcgscan.ml.mode": "fallback"})
             return _stub_vector(image_b64, self._settings.embedding_dim)
@@ -104,6 +133,7 @@ class MLClient:
                 span.set_attribute("tcgscan.ml.mode", "live")
                 ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "ocr", "tcgscan.ml.mode": "live"})
                 return out
+            self._log_fallback("ocr", url, out, call_error=self._call_error)
             span.set_attribute("tcgscan.ml.mode", "fallback")
             ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "ocr", "tcgscan.ml.mode": "fallback"})
             return {"text": "", "fields": {}}
@@ -123,6 +153,7 @@ class MLClient:
                 span.set_attribute("tcgscan.ml.mode", "live")
                 ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "grade", "tcgscan.ml.mode": "live"})
                 return out
+            self._log_fallback("grade", url, out, call_error=self._call_error)
             span.set_attribute("tcgscan.ml.mode", "fallback")
             ML_REQUESTS.add(1, {"tcgscan.ml.endpoint": "grade", "tcgscan.ml.mode": "fallback"})
             from tcgscan_ml.grade.heuristic import grade_image_b64

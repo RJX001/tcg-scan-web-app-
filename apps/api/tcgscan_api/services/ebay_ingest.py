@@ -110,7 +110,7 @@ async def run_ebay_ingest(
             dry_run=False,
         )
     except Exception as exc:
-        log.warning("ebay_ingest.failed", error=str(exc))
+        log.exception("ebay_ingest.failed", error=str(exc))
         finished = await runs.finish(
             run.id,
             status=SourceRunStatus.failed,
