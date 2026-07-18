@@ -71,17 +71,20 @@ Each package has a strictly disjoint file scope; owners are parallel subagents. 
 
 ## 4. Verification plan (Phase 2 — before any Terraform/dashboards)
 
-1. **Unit-level:** every package above lands tests asserting event names + levels (`structlog.testing.capture_logs`).
-   Full suites green: `apps/api`, `apps/worker`, `packages/agents` (`uv run pytest`), plus `ruff` + `mypy --strict`.
-2. **Local pipeline smoke:** run `docker compose --profile observability up` (Alloy) + API with
-   `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, then force each failure class and confirm the log line arrives
-   in Loki at the right level with `trace_id` attached:
-   - stop Redis → expect `cache.get_failed` / `rate_limit.fail_open` WARNING;
-   - stop Qdrant → expect `scan.qdrant_unavailable` ERROR (+ span error);
-   - set a bogus `MODAL_DETECT_URL` → expect `ml.error` ERROR with `mode=fallback`;
-   - run `pricing` ingest against an unreachable source → retry WARNINGs with attempt numbers, then exhaustion ERROR.
-3. **Signal review:** 24h of local/dev traffic; confirm ERROR volume ≈ 0 in steady state (no alert fatigue), WARNING is
-   low and meaningful, INFO is summaries only. Adjust levels that misfire **before** wiring alerts.
+> Decision 2026-07-19: skip the local smoke test — the product is alpha, so we verify **in production** by observing
+> real traffic in Grafana Cloud for a few days instead.
+
+1. **Unit-level (done):** every package landed tests asserting event names + levels (`structlog.testing.capture_logs`).
+   Full suites green: `apps/api` (178), `apps/worker` (28), `packages/agents` (11), `apps/ml` (11), plus `ruff` +
+   `mypy --strict`.
+2. **Prod observation (in progress):** deploy `19-better-telemetry-for-api` and watch Loki/Tempo for a few days:
+   - `{service_name="tcgscan-api"} | json | level="error"` should be ≈ 0 in steady state — every hit is either a real
+     incident or a severity to demote;
+   - WARNING volume should be low and meaningful (retry attempts, fail-open events, budget halts);
+   - INFO should be summaries with counters, not per-item spam;
+   - spot-check `trace_id` on error lines links to the right Tempo trace.
+3. **Signal review:** after the observation window, adjust any misfiring levels, then unblock Phase 3/4. Useful Loki
+   starting queries: `| json | level=~"error|warning" | line_format "{{.event}}"` grouped by `event`.
 
 ## 5. Later phases (reference material — do not build yet)
 
