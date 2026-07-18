@@ -573,7 +573,7 @@ async def _execute_full_catalogue_import(
             updated=result.updated_count,
         )
     except Exception as exc:
-        log.warning("catalogue_import.failed", source=source_key, error=str(exc))
+        log.exception("catalogue_import.failed", source=source_key, error=str(exc))
         await session.rollback()
         await runs.finish(
             run_id,
@@ -660,7 +660,7 @@ async def start_full_catalogue_import(
             optional_skipped=fetched.optional_skipped,
         )
     except Exception as exc:
-        log.warning("catalogue_import.failed", source=source_key, error=str(exc))
+        log.exception("catalogue_import.failed", source=source_key, error=str(exc))
         await session.rollback()
         finished = await runs.finish(
             run_id,

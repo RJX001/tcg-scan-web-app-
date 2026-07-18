@@ -1,4 +1,4 @@
-"""Sentry + OpenTelemetry bootstrap (traces + metrics via OTLP HTTP)."""
+"""OpenTelemetry bootstrap (traces + metrics + logs via OTLP HTTP)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,9 @@ log = structlog.get_logger()
 
 _OTEL_READY = False
 _HTTPX_INSTRUMENTED = False
+_SQLALCHEMY_INSTRUMENTED = False
+_REDIS_INSTRUMENTED = False
+_LOG_HANDLER_ATTACHED = False
 _INSTRUMENTED_APP_IDS: set[int] = set()
 
 
@@ -32,7 +35,7 @@ def _otel_endpoint_configured(raw: str | None) -> str | None:
 
 
 def init_observability(app: FastAPI | None = None) -> None:
-    """Initialize Sentry (optional) and OTEL providers + instrumentation (optional).
+    """Initialize OTEL providers + instrumentation (optional).
 
     Call once at startup after the FastAPI app (and routes) exist.
 
@@ -42,21 +45,6 @@ def init_observability(app: FastAPI | None = None) -> None:
     """
     global _OTEL_READY
     settings = get_settings()
-
-    if settings.sentry_dsn_api:
-        try:
-            import sentry_sdk
-            from sentry_sdk.integrations.fastapi import FastApiIntegration
-
-            sentry_sdk.init(
-                dsn=settings.sentry_dsn_api,
-                integrations=[FastApiIntegration()],
-                traces_sample_rate=0.1,
-                environment=settings.environment,
-            )
-            log.info("observability.sentry_enabled", environment=settings.environment)
-        except Exception:
-            log.exception("observability.sentry_failed")
 
     endpoint = _otel_endpoint_configured(settings.otel_exporter_otlp_endpoint)
     if endpoint is None:
@@ -68,23 +56,28 @@ def init_observability(app: FastAPI | None = None) -> None:
             _init_otel_providers(endpoint, settings.environment)
         if app is not None:
             _instrument_app(app)
+        _instrument_libraries()
     except Exception:
         # Misconfigured Alloy URL / missing optional packages must not block boot.
         log.exception("observability.otel_failed")
 
 
 def _init_otel_providers(endpoint: str, environment: str) -> None:
-    global _OTEL_READY
+    global _OTEL_READY, _LOG_HANDLER_ATTACHED
 
-    from opentelemetry import metrics, trace
+    import logging
+
+    from opentelemetry import _logs, metrics, trace
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
     from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 
     base = _otlp_base_url(endpoint)
     resource = Resource.create(
@@ -95,8 +88,9 @@ def _init_otel_providers(endpoint: str, environment: str) -> None:
         }
     )
 
-    # Low volume today — keep 100% traces in every environment.
-    tracer_provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
+    # No explicit sampler — SDK honours OTEL_TRACES_SAMPLER / OTEL_TRACES_SAMPLER_ARG
+    # (default parentbased_always_on ≈ 100% when no parent decision exists).
+    tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(
         BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{base}/v1/traces"))
     )
@@ -108,11 +102,23 @@ def _init_otel_providers(endpoint: str, environment: str) -> None:
     )
     metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[metric_reader]))
 
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter(endpoint=f"{base}/v1/logs"))
+    )
+    _logs.set_logger_provider(logger_provider)
+
+    if not _LOG_HANDLER_ATTACHED:
+        logging.getLogger().addHandler(
+            LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+        )
+        _LOG_HANDLER_ATTACHED = True
+
     _OTEL_READY = True
     log.info(
         "observability.otel_enabled",
         endpoint=base,
-        sample_ratio=1.0,
+        sampler="default/env-driven",
         environment=environment,
     )
 
@@ -138,3 +144,27 @@ def _instrument_app(app: FastAPI) -> None:
         _HTTPX_INSTRUMENTED = True
 
     log.info("observability.otel_instrumented")
+
+
+def _instrument_libraries() -> None:
+    """Instrument SQLAlchemy + Redis globally (lazy engines / async clients)."""
+    global _SQLALCHEMY_INSTRUMENTED, _REDIS_INSTRUMENTED
+
+    if not _SQLALCHEMY_INSTRUMENTED:
+        try:
+            from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+            # Global form — engines created later (lru_cached async engine) are covered.
+            SQLAlchemyInstrumentor().instrument()
+            _SQLALCHEMY_INSTRUMENTED = True
+        except Exception:
+            log.exception("observability.sqlalchemy_instrument_failed")
+
+    if not _REDIS_INSTRUMENTED:
+        try:
+            from opentelemetry.instrumentation.redis import RedisInstrumentor
+
+            RedisInstrumentor().instrument()
+            _REDIS_INSTRUMENTED = True
+        except Exception:
+            log.exception("observability.redis_instrument_failed")

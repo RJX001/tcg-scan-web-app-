@@ -11,8 +11,10 @@ import hashlib
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 
 import structlog
+from opentelemetry import metrics, trace
 from pydantic import BaseModel, Field
 from qdrant_client.http import models as qm
 
@@ -25,6 +27,27 @@ from tcgscan_api.services.qdrant import search_similar
 from tcgscan_api.services.slug import card_slug
 
 log = structlog.get_logger()
+
+tracer = trace.get_tracer("tcgscan_api.scan")
+meter = metrics.get_meter("tcgscan_api.scan")
+
+SCAN_DURATION = meter.create_histogram(
+    "tcgscan.scan.duration",
+    unit="s",
+    description="End-to-end scan duration",
+)
+SCAN_STAGE_DURATION = meter.create_histogram(
+    "tcgscan.scan.stage.duration",
+    unit="s",
+    description="Per-stage scan duration",
+)
+SCAN_COUNT = meter.create_counter(
+    "tcgscan.scan.count",
+    description="Scan requests by outcome",
+)
+
+ScanOutcome = Literal["ok", "error", "cache_hit"]
+ScanStage = Literal["detect", "embed_ocr_grade", "ann_search", "rerank", "verdict"]
 
 
 class DetectBBox(BaseModel):
@@ -207,70 +230,141 @@ async def _catalog_fallback_matches(*, game: str | None, top_k: int) -> list[Sca
     return out
 
 
+def _record_scan_outcome(*, duration_s: float, outcome: ScanOutcome) -> None:
+    attrs = {"tcgscan.scan.outcome": outcome}
+    SCAN_DURATION.record(duration_s, attrs)
+    SCAN_COUNT.add(1, attrs)
+
+
+def _record_stage_duration(*, stage: ScanStage, duration_s: float) -> None:
+    SCAN_STAGE_DURATION.record(duration_s, {"tcgscan.scan.stage": stage})
+
+
+def _set_run_span_match_attrs(span: trace.Span, matches: list[ScanMatch]) -> None:
+    span.set_attribute("tcgscan.scan.match_count", len(matches))
+    if matches:
+        span.set_attribute("tcgscan.scan.top_score", matches[0].score)
+
+
 async def run_scan(payload: ScanInput) -> ScanResult:
-    key = _cache_key(payload.image_b64)
-    cached = await cache_get(key)
-    if cached is not None:
+    with tracer.start_as_current_span("scan.run") as run_span:
+        run_span.set_attribute("tcgscan.scan.top_k", payload.top_k)
+        if payload.game_hint is not None:
+            run_span.set_attribute("tcgscan.scan.game_hint", payload.game_hint)
+
+        t_total = time.perf_counter()
+        outcome: ScanOutcome = "ok"
+
         try:
-            return ScanResult.model_validate({**cached, "cached": True})
-        except Exception:
-            pass
+            key = _cache_key(payload.image_b64)
+            cached = await cache_get(key)
+            if cached is not None:
+                try:
+                    result = ScanResult.model_validate({**cached, "cached": True})
+                    run_span.set_attribute("tcgscan.scan.cache_hit", True)
+                    _set_run_span_match_attrs(run_span, result.matches)
+                    outcome = "cache_hit"
+                    return result
+                except Exception as exc:
+                    log.warning("scan.cache_payload_invalid", key=key, error=str(exc))
 
-    stages: dict[str, float] = {}
-    ml = MLClient()
-    try:
-        t0 = time.perf_counter()
-        detect_out = await ml.detect(payload.image_b64)
-        stages["detect"] = (time.perf_counter() - t0) * 1000
+            run_span.set_attribute("tcgscan.scan.cache_hit", False)
 
-        bbox = _parse_bbox(detect_out)
-        cropped_b64 = crop_image_b64(payload.image_b64, bbox.model_dump())
-
-        t1 = time.perf_counter()
-        vector, ocr_out, grade_out = await asyncio.gather(
-            ml.embed(cropped_b64),
-            ml.ocr(cropped_b64),
-            ml.grade(cropped_b64),
-        )
-        stages["embed_ocr_grade"] = (time.perf_counter() - t1) * 1000
-
-        ocr_text = str(ocr_out.get("text") or "")
-        ocr_fields = ocr_out.get("fields")
-        if not isinstance(ocr_fields, dict):
-            ocr_fields = {}
-
-        t2 = time.perf_counter()
-        try:
-            points = await search_similar(vector=vector, game=payload.game_hint, top_k=20)
-        except Exception as exc:
-            log.warning("scan.qdrant_unavailable", error=str(exc))
-            points = []
-        stages["ann_search"] = (time.perf_counter() - t2) * 1000
-
-        matches = _rerank(points, ocr_text, ocr_fields)
-        if not matches and payload.game_hint:
-            matches = await _catalog_fallback_matches(game=payload.game_hint, top_k=payload.top_k)
-            log.info("scan.catalog_fallback", game=payload.game_hint, count=len(matches))
-        condition = ConditionEstimate.model_validate(grade_out)
-
-        if matches and condition.psa_high is not None:
+            stages: dict[str, float] = {}
+            ml = MLClient()
             try:
-                card_uuid = uuid.UUID(matches[0].card_id)
-                async with get_sessionmaker()() as session:
-                    verdict = await compute_verdict(session, card_uuid, psa_high=condition.psa_high)
-                    if verdict is not None:
-                        condition = condition.model_copy(update={"verdict": verdict})
-            except (ValueError, Exception) as exc:
-                log.warning("scan.verdict_skipped", error=str(exc))
+                with tracer.start_as_current_span("scan.detect"):
+                    t0 = time.perf_counter()
+                    detect_out = await ml.detect(payload.image_b64)
+                    bbox = _parse_bbox(detect_out)
+                    cropped_b64 = crop_image_b64(payload.image_b64, bbox.model_dump())
+                    stage_s = time.perf_counter() - t0
+                    stages["detect"] = stage_s * 1000
+                    _record_stage_duration(stage="detect", duration_s=stage_s)
 
-        result = ScanResult(
-            matches=matches[: payload.top_k],
-            condition=condition,
-            bbox=bbox,
-            stages_ms=stages,
-        )
-    finally:
-        await ml.aclose()
+                with tracer.start_as_current_span("scan.embed_ocr_grade"):
+                    t1 = time.perf_counter()
+                    vector, ocr_out, grade_out = await asyncio.gather(
+                        ml.embed(cropped_b64),
+                        ml.ocr(cropped_b64),
+                        ml.grade(cropped_b64),
+                    )
+                    stage_s = time.perf_counter() - t1
+                    stages["embed_ocr_grade"] = stage_s * 1000
+                    _record_stage_duration(stage="embed_ocr_grade", duration_s=stage_s)
 
-    await cache_set(key, result.model_dump(mode="json"), ttl_s=86400)
-    return result
+                ocr_text = str(ocr_out.get("text") or "")
+                ocr_fields = ocr_out.get("fields")
+                if not isinstance(ocr_fields, dict):
+                    ocr_fields = {}
+
+                with tracer.start_as_current_span("scan.ann_search") as ann_span:
+                    t2 = time.perf_counter()
+                    try:
+                        points = await search_similar(
+                            vector=vector, game=payload.game_hint, top_k=20
+                        )
+                    except Exception as exc:
+                        ann_span.record_exception(exc)
+                        ann_span.set_attribute("tcgscan.scan.qdrant_unavailable", True)
+                        log.error("scan.qdrant_unavailable", error=str(exc))
+                        points = []
+                    stage_s = time.perf_counter() - t2
+                    stages["ann_search"] = stage_s * 1000
+                    _record_stage_duration(stage="ann_search", duration_s=stage_s)
+
+                with tracer.start_as_current_span("scan.rerank") as rerank_span:
+                    t3 = time.perf_counter()
+                    matches = _rerank(points, ocr_text, ocr_fields)
+                    catalog_fallback = False
+                    if not matches and payload.game_hint:
+                        matches = await _catalog_fallback_matches(
+                            game=payload.game_hint, top_k=payload.top_k
+                        )
+                        catalog_fallback = True
+                        log.info(
+                            "scan.catalog_fallback", game=payload.game_hint, count=len(matches)
+                        )
+                    rerank_span.set_attribute("tcgscan.scan.catalog_fallback", catalog_fallback)
+                    stage_s = time.perf_counter() - t3
+                    _record_stage_duration(stage="rerank", duration_s=stage_s)
+
+                condition = ConditionEstimate.model_validate(grade_out)
+
+                if matches and condition.psa_high is not None:
+                    with tracer.start_as_current_span("scan.verdict") as verdict_span:
+                        t4 = time.perf_counter()
+                        try:
+                            card_uuid = uuid.UUID(matches[0].card_id)
+                            async with get_sessionmaker()() as session:
+                                verdict = await compute_verdict(
+                                    session, card_uuid, psa_high=condition.psa_high
+                                )
+                                if verdict is not None:
+                                    condition = condition.model_copy(update={"verdict": verdict})
+                        except ValueError as exc:
+                            verdict_span.record_exception(exc)
+                            log.warning("scan.verdict_skipped", error=str(exc))
+                        except Exception as exc:
+                            verdict_span.record_exception(exc)
+                            log.exception("scan.verdict_failed")
+                        stage_s = time.perf_counter() - t4
+                        _record_stage_duration(stage="verdict", duration_s=stage_s)
+
+                result = ScanResult(
+                    matches=matches[: payload.top_k],
+                    condition=condition,
+                    bbox=bbox,
+                    stages_ms=stages,
+                )
+            finally:
+                await ml.aclose()
+
+            await cache_set(key, result.model_dump(mode="json"), ttl_s=86400)
+            _set_run_span_match_attrs(run_span, result.matches)
+            return result
+        except Exception:
+            outcome = "error"
+            raise
+        finally:
+            _record_scan_outcome(duration_s=time.perf_counter() - t_total, outcome=outcome)

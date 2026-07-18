@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from tcgscan_api.config import get_settings
 from tcgscan_api.cors import cors_origins_from_settings, wrap_with_cors
 from tcgscan_api.errors import AppError
+from tcgscan_api.logging_setup import configure_logging
 from tcgscan_api.middleware.auth import AuthMiddleware
 from tcgscan_api.routes import (
     admin,
@@ -24,6 +25,8 @@ from tcgscan_api.routes import (
 )
 from tcgscan_api.telemetry import init_observability
 
+# JSON stdout + stdlib bridge before the FastAPI app / OTEL bootstrap.
+configure_logging()
 
 log = structlog.get_logger()
 
@@ -32,7 +35,7 @@ log = structlog.get_logger()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     cors_origins = cors_origins_from_settings()
-    log.info("Allowed CORS origins: %s", cors_origins)
+    log.info("api.cors_origins", origins=cors_origins)
     if settings.environment == "production" and not (
         settings.supabase_jwt_secret or settings.supabase_jwks_url
     ):
@@ -50,6 +53,13 @@ fastapi_app.add_middleware(AuthMiddleware)
 @fastapi_app.exception_handler(AppError)
 async def app_error_handler(_req: Request, exc: AppError) -> JSONResponse:
     """RFC 9457 problem-json mapping."""
+    if exc.status_code >= 500:
+        log.error(
+            "api.app_error",
+            code=exc.__class__.__name__,
+            status_code=exc.status_code,
+            message=exc.message,
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -91,7 +101,7 @@ fastapi_app.include_router(searches.router, prefix="/v1")
 fastapi_app.include_router(watchlist.router, prefix="/v1")
 fastapi_app.include_router(admin.router, prefix="/v1")
 
-# OTEL/Sentry after routes exist so FastAPI auto-instrumentation sees them.
+# OTEL after routes exist so FastAPI auto-instrumentation sees them.
 init_observability(fastapi_app)
 
 # Outermost ASGI wrapper — uvicorn imports `app`.

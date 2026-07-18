@@ -5,8 +5,12 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
 
+import structlog
+
 from tcgscan_worker.http import ResilientClient
 from tcgscan_worker.sources.base import PriceSource, SaleRecord, register
+
+log = structlog.get_logger()
 
 
 @register("cardmarket")
@@ -38,6 +42,7 @@ class CardmarketSource(PriceSource):
             if isinstance(payload, list)
             else payload.get("data") or payload.get("items") or []
         )
+        emitted = 0
         for it in items:
             if not isinstance(it, dict):
                 continue
@@ -57,3 +62,5 @@ class CardmarketSource(PriceSource):
                 listing_url=it.get("url"),
                 raw_payload=it,
             )
+            emitted += 1
+        log.debug("cardmarket.fetch.done", items=len(items), emitted=emitted)

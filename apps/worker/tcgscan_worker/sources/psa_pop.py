@@ -92,5 +92,5 @@ class PsaPopSource:
                         raw_payload=entry,
                     )
                 )
-        log.info("psa_pop.fetched", spec_id=spec_id, grades=len(records))
+        log.debug("psa_pop.fetched", spec_id=spec_id, grades=len(records))
         return records

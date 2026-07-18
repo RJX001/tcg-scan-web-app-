@@ -5,8 +5,12 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
 
+import structlog
+
 from tcgscan_worker.http import ResilientClient
 from tcgscan_worker.sources.base import PriceSource, SaleRecord, register
+
+log = structlog.get_logger()
 
 
 @register("tcgplayer")
@@ -27,6 +31,7 @@ class TcgPlayerSource(PriceSource):
     async def iter_records(self, *, query: str, limit: int = 100) -> AsyncIterator[SaleRecord]:
         payload = await self.client.get_json("/prices/latest", params={"q": query, "limit": limit})
         items = payload.get("data") or []
+        emitted = 0
         for it in items:
             price = it.get("market_price") or it.get("low_price")
             if price is None:
@@ -44,3 +49,5 @@ class TcgPlayerSource(PriceSource):
                 listing_url=it.get("url"),
                 raw_payload=it,
             )
+            emitted += 1
+        log.debug("tcgplayer.fetch.done", items=len(items), emitted=emitted)

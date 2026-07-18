@@ -155,6 +155,7 @@ async def handle_stripe_webhook(
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
     except Exception as exc:
+        log.warning("stripe.webhook_signature_invalid")
         raise AppError(f"Invalid webhook: {exc}", status_code=400) from exc
 
     etype = event["type"]
@@ -169,10 +170,22 @@ async def handle_stripe_webhook(
         user_id = _user_id_from_metadata(data)
         if user_id:
             await UsersRepo(session).set_tier(user_id, UserTier.pro)
+        else:
+            log.warning(
+                "stripe.webhook_unresolved_user",
+                event_type=etype,
+                customer=data.get("customer"),
+            )
     elif etype in ("customer.subscription.deleted",):
         user_id = await _user_id_from_customer(session, data.get("customer"))
         if user_id:
             await UsersRepo(session).set_tier(user_id, UserTier.free)
+        else:
+            log.warning(
+                "stripe.webhook_unresolved_user",
+                event_type=etype,
+                customer=data.get("customer"),
+            )
 
 
 def _user_id_from_metadata(data: dict[str, object]) -> uuid.UUID | None:

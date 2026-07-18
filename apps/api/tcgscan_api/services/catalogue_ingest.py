@@ -215,7 +215,7 @@ async def run_catalogue_ingest(
             dry_run=False,
         )
     except Exception as exc:
-        log.warning("catalogue_ingest.failed", source=source_key, error=str(exc))
+        log.exception("catalogue_ingest.failed", source=source_key, error=str(exc))
         finished = await runs.finish(
             run.id,
             status=SourceRunStatus.failed,

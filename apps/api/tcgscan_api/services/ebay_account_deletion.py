@@ -90,5 +90,4 @@ def log_account_deletion_notification(body: Any) -> None:
         topic=meta["topic"],
         event_date=meta["eventDate"],
         user_id=meta["userId"],
-        eias_token=meta["eiasToken"],
     )

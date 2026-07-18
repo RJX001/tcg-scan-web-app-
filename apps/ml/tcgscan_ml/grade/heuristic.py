@@ -12,7 +12,11 @@ import hashlib
 import io
 from typing import Any
 
+import structlog
+
 from tcgscan_ml.grade.psa import overall_to_psa_range
+
+log = structlog.get_logger()
 
 PIL_AVAILABLE = True
 try:
@@ -37,7 +41,8 @@ def grade_image_bytes(raw: bytes) -> dict[str, Any]:
 
     try:
         img = Image.open(io.BytesIO(raw)).convert("RGB")
-    except Exception:
+    except Exception as exc:
+        log.warning("grade.image_unreadable", error=str(exc))
         overall = _clamp(7.0 + jitter)
         psa_low, psa_high = overall_to_psa_range(overall)
         return _build_response(
@@ -93,6 +98,7 @@ def grade_image_b64(image_b64: str) -> dict[str, Any]:
     try:
         raw = base64.b64decode(image_b64, validate=True)
     except (binascii.Error, ValueError):
+        log.debug("grade.b64_fallback")
         raw = image_b64.encode("utf-8")
     return grade_image_bytes(raw)
 

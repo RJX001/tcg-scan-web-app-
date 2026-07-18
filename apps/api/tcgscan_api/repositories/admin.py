@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import structlog
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,8 @@ from tcgscan_api.db.models import (
     UserTier,
     WatchlistItem,
 )
+
+log = structlog.get_logger()
 
 
 class AdminRepo:
@@ -224,5 +227,6 @@ class AdminRepo:
         try:
             await self._session.execute(text("SELECT 1"))
             return True
-        except Exception:
+        except Exception as exc:
+            log.warning("admin.db_unreachable", error=str(exc))
             return False

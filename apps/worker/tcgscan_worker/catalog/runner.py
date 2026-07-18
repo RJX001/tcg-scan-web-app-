@@ -16,7 +16,9 @@ log = structlog.get_logger()
 async def ingest_game(game: str, *, limit: int | None = None, batch_size: int = 500) -> int:
     cls = REGISTRY.get(game)
     if cls is None:
-        raise ValueError(f"unknown game: {game}. Known: {sorted(REGISTRY)}")
+        known = sorted(REGISTRY)
+        log.error("catalog.unknown_game", game=game, known=known)
+        raise ValueError(f"unknown game: {game}. Known: {known}")
     ingester = cls()
     log.info("catalog.ingest.start", game=game, limit=limit)
 
@@ -48,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args(argv)
     written = asyncio.run(ingest_game(args.game, limit=args.limit))
-    print(f"upserted={written} game={args.game}")
+    log.info("catalog.cli.done", upserted=written, game=args.game)
     return 0
 
 

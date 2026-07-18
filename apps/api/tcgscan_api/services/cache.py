@@ -23,13 +23,14 @@ async def cache_get(key: str) -> Any | None:
     try:
         raw = await get_redis().get(key)
     except Exception as exc:  # redis unreachable in local dev -> degrade gracefully
-        log.debug("cache.miss", key=key, error=str(exc))
+        log.warning("cache.get_failed", key=key, error=str(exc))
         return None
     if raw is None:
         return None
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
+        log.warning("cache.payload_invalid", key=key)
         return None
 
 
@@ -37,4 +38,4 @@ async def cache_set(key: str, value: Any, ttl_s: int = 900) -> None:
     try:
         await get_redis().set(key, json.dumps(value, default=str), ex=ttl_s)
     except Exception as exc:
-        log.debug("cache.set_failed", key=key, error=str(exc))
+        log.warning("cache.set_failed", key=key, error=str(exc))

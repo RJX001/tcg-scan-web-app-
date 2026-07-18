@@ -77,7 +77,6 @@ class Settings(BaseSettings):
         default="http://localhost:3000/account?checkout=cancel", alias="STRIPE_CANCEL_URL"
     )
 
-    sentry_dsn_api: str | None = Field(default=None, alias="SENTRY_DSN_API")
     otel_exporter_otlp_endpoint: str | None = Field(
         default=None, alias="OTEL_EXPORTER_OTLP_ENDPOINT"
     )

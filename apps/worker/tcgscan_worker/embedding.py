@@ -13,7 +13,9 @@ import base64
 import hashlib
 import os
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -29,6 +31,20 @@ from tcgscan_worker.http import ResilientClient
 log = structlog.get_logger()
 
 
+@dataclass(frozen=True)
+class EmbedResult:
+    vector: list[float]
+    outcome: str  # "embedded" | "stubbed"
+    download_failed: bool = False
+
+
+def _image_host(image_url: str) -> str:
+    try:
+        return urlparse(image_url).netloc or "unknown"
+    except ValueError:
+        return "unknown"
+
+
 def _stub_vector(seed: str, dim: int) -> list[float]:
     """Deterministic pseudo-embedding for local dev when no Modal endpoint is set."""
     digest = hashlib.sha256(seed.encode("utf-8")).digest()
@@ -38,31 +54,46 @@ def _stub_vector(seed: str, dim: int) -> list[float]:
     return [v / norm for v in vec]
 
 
-async def _download_image_b64(image_url: str) -> str | None:
+async def _download_image_b64(image_url: str, *, card_id: str) -> tuple[str | None, bool]:
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             resp = await client.get(image_url)
             resp.raise_for_status()
-            return base64.b64encode(resp.content).decode("ascii")
+            return base64.b64encode(resp.content).decode("ascii"), False
     except (httpx.HTTPError, ValueError) as exc:
-        log.warning("embed.download_failed", url=image_url, error=str(exc))
-        return None
+        log.debug(
+            "embed.download_failed",
+            card_id=card_id,
+            host=_image_host(image_url),
+            error=str(exc),
+        )
+        return None, True
 
 
-async def _embed_image(client: ResilientClient | None, *, image_url: str, dim: int) -> list[float]:
-    image_b64 = await _download_image_b64(image_url)
+async def _embed_image(
+    client: ResilientClient | None,
+    *,
+    image_url: str,
+    card_id: str,
+    dim: int,
+) -> EmbedResult:
+    image_b64, download_failed = await _download_image_b64(image_url, card_id=card_id)
     if client is None or not os.getenv("MODAL_EMBED_URL"):
         if image_b64:
-            return _stub_vector(image_b64, dim)
-        return _stub_vector(image_url, dim)
+            return EmbedResult(_stub_vector(image_b64, dim), "stubbed", download_failed)
+        return EmbedResult(_stub_vector(image_url, dim), "stubbed", download_failed)
     if not image_b64:
-        return _stub_vector(image_url, dim)
+        return EmbedResult(_stub_vector(image_url, dim), "stubbed", download_failed)
     payload: dict[str, Any] = await client.post_json("", json={"image_b64": image_b64})
     vec = payload.get("vector")
     if not isinstance(vec, list) or len(vec) != dim:
-        log.warning("embed.bad_response", got_dim=len(vec) if isinstance(vec, list) else None)
-        return _stub_vector(image_url, dim)
-    return [float(x) for x in vec]
+        log.debug(
+            "embed.bad_response",
+            card_id=card_id,
+            got_dim=len(vec) if isinstance(vec, list) else None,
+        )
+        return EmbedResult(_stub_vector(image_url, dim), "stubbed", download_failed)
+    return EmbedResult([float(x) for x in vec], "embedded", download_failed)
 
 
 async def _ensure_collection(qclient: AsyncQdrantClient, collection: str, dim: int) -> None:
@@ -89,6 +120,7 @@ async def embed_game(game: str, *, limit: int | None = None, batch: int = 64) ->
         ResilientClient(base_url=modal_url, rate_per_sec=5.0, burst=10) if modal_url else None
     )
 
+    counters = {"embedded": 0, "stubbed": 0, "skipped_no_image": 0, "download_failed": 0}
     total = 0
     try:
         async with get_sessionmaker()() as session:
@@ -122,15 +154,25 @@ async def embed_game(game: str, *, limit: int | None = None, batch: int = 64) ->
                     or ""
                 )
                 if not image_url:
+                    counters["skipped_no_image"] += 1
                     continue
-                vec = await _embed_image(
-                    http_client, image_url=image_url, dim=settings.embedding_dim
+                result = await _embed_image(
+                    http_client,
+                    image_url=image_url,
+                    card_id=str(card.id),
+                    dim=settings.embedding_dim,
                 )
+                if result.download_failed:
+                    counters["download_failed"] += 1
+                if result.outcome == "embedded":
+                    counters["embedded"] += 1
+                else:
+                    counters["stubbed"] += 1
                 pop_seed = hashlib.sha256(str(card.id).encode()).digest()[0] / 255.0
                 buffer.append(
                     qm.PointStruct(
                         id=_card_uuid(card.id),
-                        vector=vec,
+                        vector=result.vector,
                         payload={
                             "card_id": str(card.id),
                             "game": str(
@@ -154,7 +196,11 @@ async def embed_game(game: str, *, limit: int | None = None, batch: int = 64) ->
         if http_client:
             await http_client.aclose()
         await qclient.close()
-    log.info("embed.done", game=game, total=total)
+
+    log.info("embed.run.done", game=game, total=total, **counters)
+    processed = counters["embedded"] + counters["stubbed"]
+    if counters["stubbed"] > 0:
+        log.error("embed.run.degraded", stubbed=counters["stubbed"], total=processed)
     return total
 
 
@@ -166,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args(argv)
     n = asyncio.run(embed_game(args.game, limit=args.limit))
-    print(f"embedded={n} game={args.game}")
+    log.info("embed.cli.done", embedded=n, game=args.game)
     return 0
 
 
