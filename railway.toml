@@ -1,3 +1,7 @@
+# API service only.
+# Config-as-code ALWAYS overrides the Railway dashboard. Do not point the Alloy
+# service at this file — use /infra/alloy/railway.toml instead.
 [build]
+builder = "DOCKERFILE"
 dockerfilePath = "apps/api/Dockerfile"
 buildContext = "."

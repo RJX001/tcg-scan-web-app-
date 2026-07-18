@@ -1,7 +1,13 @@
-# Railway service: set Root Directory to `infra/alloy`.
+# Alloy service — in Railway set Config-as-code path to:
+#   /infra/alloy/railway.toml
+# (not the repo-root railway.toml, which is the API and will overwrite UI).
+#
+# Paths are from the repository root. Leave Root Directory as `/`.
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "infra/alloy/Dockerfile"
+buildContext = "infra/alloy"
+watchPatterns = ["infra/alloy/**"]
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
