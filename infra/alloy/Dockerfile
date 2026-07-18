@@ -1,7 +1,9 @@
 FROM grafana/alloy:v1.9.2
 
-COPY config.alloy /etc/alloy/config.alloy
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+# Build context is the repo root (Railway default; buildContext is not a
+# valid railway.toml field). Paths are relative to the repository root.
+COPY infra/alloy/config.alloy /etc/alloy/config.alloy
+COPY infra/alloy/docker-entrypoint.sh /docker-entrypoint.sh
 
 USER root
 RUN chmod +x /docker-entrypoint.sh \

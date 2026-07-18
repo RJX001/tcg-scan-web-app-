@@ -3,10 +3,10 @@
 # (not the repo-root railway.toml, which is the API and will overwrite UI).
 #
 # Paths are from the repository root. Leave Root Directory as `/`.
+# Note: Railway has no buildContext setting; context is always the root dir.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "infra/alloy/Dockerfile"
-buildContext = "infra/alloy"
 watchPatterns = ["infra/alloy/**"]
 
 [deploy]
