@@ -45,3 +45,11 @@ apps/ml/eval/reports/*.md
 
 # logs
 *.log
+
+# Terraform (local providers / state; lockfile is committed under infra/grafana/)
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/crash.log
+**/*.tfvars
+!**/terraform.tfvars.example

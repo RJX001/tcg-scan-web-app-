@@ -99,9 +99,18 @@ Each package has a strictly disjoint file scope; owners are parallel subagents. 
 | Cache availability | `cache.get_failed` WARNING rate | < 0.1% of requests |
 | API availability | FastAPI HTTP metrics (5xx ratio) | ≥ 99.5% |
 
-**Phase 4 — dashboards + alert conditions** (Terraform against Grafana Cloud): alert on any ERROR-level Loki line per
-service (`{service_name="tcgscan-api"} | json | level="error"`), plus metric alerts on the SLOs above. One dashboard
-per service + one scan-funnel dashboard. Keep alert rules in `infra/terraform/` (does not exist yet).
+**Phase 4 — dashboards + alert conditions** (Terraform against Grafana Cloud): dashboards + alert rules live in
+`infra/grafana/` (`dashboards/*.json`, `alerts.tf`, CI via `.github/workflows/grafana.yml`). Rules route to the
+existing `telegram` contact point by name (not managed in Terraform). Base rule group `tcgscan-api`:
+
+| Rule | Signal | Severity |
+|---|---|---|
+| API outbound HTTP request slower than 7.5s | Prom histogram (existing) | warning |
+| API ERROR logs | Loki `{service_name="tcgscan/tcgscan-api", level="ERROR"}` | critical |
+| API 5xx ratio high | HTTP 5xx > 0.5% for 10m | critical |
+| Scan success rate low | ok+cache_hit < 99% for 15m | warning |
+| Scan p95 latency high | p95 > 2.5s for 15m | warning |
+| ML fallback ratio high | fallback > 1% for 15m | warning |
 
 ## 6. Status log
 
