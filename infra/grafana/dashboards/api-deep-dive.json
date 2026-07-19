@@ -1,0 +1,1396 @@
+{
+  "uid": "tcgscan-api-deep-dive",
+  "title": "TCG Scan \u2014 API Deep Dive",
+  "tags": [
+    "tcgscan",
+    "api",
+    "deep-dive",
+    "terraform"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "editable": true,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "description": "Investigation dashboard: per-route/host HTTP detail, outbound dependency latency, retry/cache degradation events, and scan-stage drill-down.",
+  "links": [
+    {
+      "title": "API Overview",
+      "type": "link",
+      "url": "/d/tcgscan-api-overview",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Scan Funnel",
+      "type": "link",
+      "url": "/d/tcgscan-scan-funnel",
+      "icon": "dashboard",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Snapshot",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Req/s (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket{job=\"tcgscan/tcgscan-api\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "title": "p95 latency (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.005
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\", http_status_code=~\"5..\"}[15m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[15m])), 1e-9)",
+          "refId": "A"
+        }
+      ],
+      "title": "5xx ratio (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2000
+              },
+              {
+                "color": "red",
+                "value": 7500
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_client_duration_milliseconds_bucket{job=\"tcgscan/tcgscan-api\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "title": "Outbound p95 (5m)",
+      "type": "stat",
+      "description": "Alert fires when individual outbound calls exceed 7.5s."
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service_name=\"tcgscan/tcgscan-api\", level=\"ERROR\"}[15m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "ERROR lines (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service_name=\"tcgscan/tcgscan-api\", level=\"WARNING\"}[15m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "WARNING lines (15m)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 10,
+      "title": "Inbound HTTP \u2014 by route",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Top routes by request rate. Use to spot unexpected hot paths or scan/search spikes.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "topk(12, sum by (http_target) (rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{http_target}}"
+        }
+      ],
+      "title": "Request rate by path",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Slowest inbound routes (p95). Correlate with outbound host panels below.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "topk(12, histogram_quantile(0.95, sum by (le, http_target) (rate(http_server_duration_milliseconds_bucket{job=\"tcgscan/tcgscan-api\"}[$__rate_interval]))))",
+          "refId": "A",
+          "legendFormat": "{{http_target}}"
+        }
+      ],
+      "title": "p95 latency by path",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "topk(12, sum by (http_target) (rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\", http_status_code=~\"4..|5..\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{http_target}}"
+        }
+      ],
+      "title": "Error rate by path (4xx+5xx)",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "sum by (http_status_code) (rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{http_status_code}}"
+        }
+      ],
+      "title": "Status mix (stacked)",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Instant ranking of hottest inbound routes.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 15,
+      "targets": [
+        {
+          "expr": "topk(15, sum by (http_target) (rate(http_server_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[15m])))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "title": "Top paths by request rate (15m)",
+      "type": "table",
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true
+            },
+            "renameByName": {
+              "http_target": "path",
+              "Value": "req/s"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 20,
+      "title": "Outbound HTTP \u2014 dependencies (Modal, eBay, catalogs)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Which upstream hosts the API is calling. Empty host labels mean the client didn't set net.peer.name.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "id": 21,
+      "targets": [
+        {
+          "expr": "topk(12, sum by (http_host) (rate(http_client_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{http_host}}"
+        }
+      ],
+      "title": "Outbound rate by host",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Pairs with the 7.5s outbound slow alert \u2014 identify which host is dragging.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "id": 22,
+      "targets": [
+        {
+          "expr": "topk(12, histogram_quantile(0.95, sum by (le, http_host) (rate(http_client_duration_milliseconds_bucket{job=\"tcgscan/tcgscan-api\"}[$__rate_interval]))))",
+          "refId": "A",
+          "legendFormat": "{{http_host}}"
+        }
+      ],
+      "title": "Outbound p95 by host",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "id": 23,
+      "targets": [
+        {
+          "expr": "topk(12, sum by (http_host) (rate(http_client_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\", http_status_code=~\"4..|5..\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "{{http_host}}"
+        }
+      ],
+      "title": "Outbound errors by host (4xx+5xx)",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 24,
+      "targets": [
+        {
+          "expr": "sum by (http_method, http_status_code) (rate(http_client_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{http_method}} {{http_status_code}}"
+        }
+      ],
+      "title": "Outbound by method + status",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Same signal as the existing Telegram alert, charted over time.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "id": 25,
+      "targets": [
+        {
+          "expr": "sum(rate(http_client_duration_milliseconds_count{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])) - sum(rate(http_client_duration_milliseconds_bucket{job=\"tcgscan/tcgscan-api\", le=\"7500\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "slower than 7.5s"
+        }
+      ],
+      "title": "Slow outbound calls (>7.5s bucket)",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "id": 26,
+      "targets": [
+        {
+          "expr": "sum(http_server_active_requests{job=\"tcgscan/tcgscan-api\"})",
+          "refId": "A",
+          "legendFormat": "active"
+        }
+      ],
+      "title": "Active inbound requests",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 54
+      },
+      "id": 30,
+      "title": "Payload size",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Useful for scan uploads \u2014 large bodies correlate with ML/embed latency.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 55
+      },
+      "id": 31,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_size_bytes_bucket{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "p95"
+        }
+      ],
+      "title": "Request size p95",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 55
+      },
+      "id": 32,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_response_size_bytes_bucket{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "p95"
+        }
+      ],
+      "title": "Response size p95",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 62
+      },
+      "id": 40,
+      "title": "Scan pipeline + ML (populates when custom metrics export)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 63
+      },
+      "id": 41,
+      "targets": [
+        {
+          "expr": "sum by (tcgscan_scan_outcome) (rate(tcgscan_scan_count_total{job=\"tcgscan/tcgscan-api\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{tcgscan_scan_outcome}}"
+        }
+      ],
+      "title": "Scan rate by outcome",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Stages: detect / embed_ocr_grade / ann_search / rerank / verdict.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 63
+      },
+      "id": 42,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, tcgscan_scan_stage) (rate(tcgscan_scan_stage_duration_seconds_bucket{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])))",
+          "refId": "A",
+          "legendFormat": "p50 {{tcgscan_scan_stage}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, tcgscan_scan_stage) (rate(tcgscan_scan_stage_duration_seconds_bucket{job=\"tcgscan/tcgscan-api\"}[$__rate_interval])))",
+          "refId": "B",
+          "legendFormat": "p95 {{tcgscan_scan_stage}}"
+        }
+      ],
+      "title": "Stage p50 / p95 duration",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 63
+      },
+      "id": 43,
+      "targets": [
+        {
+          "expr": "sum by (tcgscan_ml_endpoint, tcgscan_ml_mode) (rate(tcgscan_ml_requests_total{job=\"tcgscan/tcgscan-api\"}[$__rate_interval]))",
+          "refId": "A",
+          "legendFormat": "{{tcgscan_ml_endpoint}} / {{tcgscan_ml_mode}}"
+        }
+      ],
+      "title": "ML by endpoint \u00d7 mode",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 71
+      },
+      "id": 50,
+      "title": "Log event taxonomy (structured events from sre.md)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "description": "Alertable ERROR events: ml.error, scan.qdrant_unavailable, http.exhausted, api.app_error, \u2026",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 72
+      },
+      "id": 51,
+      "targets": [
+        {
+          "expr": "sum by (event) (count_over_time({service_name=\"tcgscan/tcgscan-api\", level=\"ERROR\"} | json event=\"body.event\" [$__auto]))",
+          "refId": "A",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "title": "ERROR events by name",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "description": "Recurrence watch: rate_limit.fail_open, cache.get_failed, http.retry, stripe.webhook_*, \u2026",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 72
+      },
+      "id": 52,
+      "targets": [
+        {
+          "expr": "sum by (event) (count_over_time({service_name=\"tcgscan/tcgscan-api\", level=\"WARNING\"} | json event=\"body.event\" [$__auto]))",
+          "refId": "A",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "title": "WARNING events by name",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum"
+          ],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "description": "Canonical retry path: attempt WARNING \u2192 exhaustion ERROR.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 80
+      },
+      "id": 53,
+      "targets": [
+        {
+          "expr": "sum by (event) (count_over_time({service_name=\"tcgscan/tcgscan-api\"} | json event=\"body.event\" | event=~\"http\\\\.retry.*|source_http\\\\.retry.*|.*exhausted|.*circuit.*\" [$__auto]))",
+          "refId": "A",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "title": "Retry + exhaustion",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "description": "Redis fail-open and cache get/set/payload failures.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 80
+      },
+      "id": 54,
+      "targets": [
+        {
+          "expr": "sum by (event) (count_over_time({service_name=\"tcgscan/tcgscan-api\"} | json event=\"body.event\" | event=~\"cache\\\\..*|rate_limit\\\\..*\" [$__auto]))",
+          "refId": "A",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "title": "Cache + rate-limit degradation",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 88
+      },
+      "id": 60,
+      "title": "Raw logs",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 89
+      },
+      "id": 61,
+      "options": {
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "targets": [
+        {
+          "expr": "{service_name=\"tcgscan/tcgscan-api\", level=\"ERROR\"} | json",
+          "refId": "A"
+        }
+      ],
+      "title": "ERROR logs",
+      "type": "logs",
+      "description": "Click a line \u2192 expand \u2192 follow trace_id into Tempo."
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 89
+      },
+      "id": 62,
+      "options": {
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "targets": [
+        {
+          "expr": "{service_name=\"tcgscan/tcgscan-api\", level=\"WARNING\"} | json",
+          "refId": "A"
+        }
+      ],
+      "title": "WARNING logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 101
+      },
+      "id": 63,
+      "options": {
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "targets": [
+        {
+          "expr": "{service_name=\"tcgscan/tcgscan-api\"} | json event=\"body.event\" | event=~\"http\\\\.retry.*|source_http\\\\.retry.*|.*exhausted|.*circuit.*\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Retry / circuit / exhausted",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 111
+      },
+      "id": 64,
+      "options": {
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "showLabels": false,
+        "showCommonLabels": false
+      },
+      "targets": [
+        {
+          "expr": "{service_name=\"tcgscan/tcgscan-api\"} | json event=\"body.event\" | event=~\"scan\\\\..*|ml\\\\..*\" | level=~\"ERROR|WARNING\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Scan + ML failure events",
+      "type": "logs"
+    }
+  ]
+}
